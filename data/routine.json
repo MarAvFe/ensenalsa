@@ -20,6 +20,11 @@
     "music_offset": 0.0
   },
   "start_basic": "diagonal_basic",
+  "start_style": "flat",
+  "styles": {
+    "flat":    {"label": "Flat",    "hip_twist": 0.0, "arm_forward": 0.0,  "arm_out": 0.12, "elbow": 0.35},
+    "natural": {"label": "Natural", "hip_twist": 1.6, "arm_forward": 0.25, "arm_out": 0.3,  "elbow": 2.0}
+  },
   "labels": {"diagonal_basic": "Diagonal", "inline_basic": "Front-back", "side_basic": "Sides"},
   "basics": {
     "diagonal_basic": [

@@ -9,6 +9,8 @@ var p: Dictionary # params from the data file
 var basics := {} # name -> 8 states {count, basic, weight, action:{L,R}, feet:{L:Vector3,R:Vector3}}
 var labels: Dictionary # name -> button label
 var start_basic: String
+var styles: Dictionary # name -> {label, hip_twist, arm_forward, arm_out, elbow}
+var start_style: String
 
 
 func _init(path: String) -> void:
@@ -17,6 +19,8 @@ func _init(path: String) -> void:
 	p = data.params
 	labels = data.labels
 	start_basic = data.start_basic
+	styles = data.styles
+	start_style = data.start_style
 	for basic_name in data.basics:
 		var counts: Array = data.basics[basic_name]
 		var feet := {"L": _v(p.home_L, 0.0), "R": _v(p.home_R, 0.0)} # every basic starts and ends at home
@@ -95,6 +99,8 @@ func sample(t: float, prev: String, cur: String, next: String) -> Dictionary:
 
 	_play_all(z, a, b, s, out)
 	out.pelvis = _pelvis(out.feet, out.w_r)
+	# how far R is ahead of L relative to home (metres); a style's hip_twist turns it into hip yaw
+	out.twist = (out.feet.R.z - p.home_R[1]) - (out.feet.L.z - p.home_L[1])
 	return out
 
 

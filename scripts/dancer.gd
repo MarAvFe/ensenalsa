@@ -7,6 +7,7 @@ const ANKLE_H := 0.08 # ankle joint height above the sole
 const HIP_X := 0.10
 const HIP_DROP := 0.05 # hip joints sit this far below the pelvis origin
 const PELVIS_H := 0.93
+const SPINE_UNTWIST := [0.4, 0.35, 0.25] # share of the hip twist each spine joint undoes: shoulders stay square
 
 const COL_BODY := Color(0.75, 0.72, 0.68)
 const COL_L := Color(0.25, 0.45, 0.95)
@@ -14,6 +15,8 @@ const COL_R := Color(0.95, 0.3, 0.25)
 
 var pelvis: Node3D
 var legs := {} # "L"/"R" -> {hip, knee, ankle}
+var arms := {} # "L"/"R" -> {upper, fore}
+var spine: Array[Node3D] = []
 
 
 func _ready() -> void:
@@ -23,6 +26,7 @@ func _ready() -> void:
 	var s := pelvis
 	for i in 3:
 		s = _joint(s, "Spine%d" % (i + 1), Vector3(0, 0.06 if i == 0 else 0.15, 0))
+		spine.append(s)
 		_capsule(s, 0.15, 0.09 + 0.015 * i, COL_BODY, true)
 	var neck := _joint(s, "Neck", Vector3(0, 0.15, 0))
 	_capsule(neck, 0.10, 0.04, COL_BODY, true)
@@ -36,11 +40,10 @@ func _ready() -> void:
 		var sh := _joint(s, "Shoulder" + side, Vector3(0.19 * sx, 0.13, 0))
 		_sphere(sh, 0.05, Vector3.ZERO, COL_BODY)
 		var ua := _joint(sh, "UpperArm" + side, Vector3.ZERO)
-		ua.rotation.z = 0.12 * sx # arms hang relaxed, slightly away from the body
 		_capsule(ua, 0.30, 0.04, COL_BODY)
 		var fa := _joint(ua, "Forearm" + side, Vector3(0, -0.30, 0))
-		fa.rotation.x = 0.35
 		_capsule(fa, 0.27, 0.035, COL_BODY)
+		arms[side] = {"upper": ua, "fore": fa}
 
 		var hip := _joint(pelvis, "Thigh" + side, Vector3(HIP_X * sx, -HIP_DROP, 0))
 		_capsule(hip, THIGH, 0.065, col)
@@ -59,12 +62,22 @@ func _ready() -> void:
 
 ## Pose the dancer. `feet` maps "L"/"R" to dancer-frame Vector3(x, lift, z) of the sole,
 ## `pitch` maps side to foot pitch, `c` is the dancer-frame pelvis position (x, _, z),
-## `dip` lowers the pelvis from `height`.
-func apply(feet: Dictionary, pitch: Dictionary, c: Vector3, height: float, dip: float) -> void:
+## `dip` lowers the pelvis from `height`. `style` (all optional): hip `yaw` in radians
+## (+ = right hip forward), `arm_forward`/`arm_out` upper-arm angles, `elbow` bend.
+func apply(feet: Dictionary, pitch: Dictionary, c: Vector3, height: float, dip: float, style := {}) -> void:
+	var yaw: float = style.get("yaw", 0.0)
+	pelvis.rotation.y = yaw
+	for i in 3:
+		spine[i].rotation.y = -yaw * SPINE_UNTWIST[i]
+	for side in ["L", "R"]:
+		var sx := -1.0 if side == "L" else 1.0
+		arms[side].upper.rotation = Vector3(style.get("arm_forward", 0.0), 0, style.get("arm_out", 0.12) * sx)
+		arms[side].fore.rotation.x = style.get("elbow", 0.35)
 	var y := height - dip
 	for side in ["L", "R"]: # wide stance: sink the pelvis just enough that both legs keep a slight bend
 		var f: Vector3 = feet[side]
-		var hip := Vector2(c.x + HIP_X * (-1.0 if side == "L" else 1.0), c.z)
+		var hx := HIP_X * (-1.0 if side == "L" else 1.0)
+		var hip := Vector2(c.x + hx * cos(yaw), c.z + hx * sin(yaw))
 		var flat := hip.distance_to(Vector2(f.x, f.z))
 		var reach := (THIGH + SHIN) * 0.97
 		y = minf(y, ANKLE_H + f.y + HIP_DROP + sqrt(maxf(reach * reach - flat * flat, 0.0)))

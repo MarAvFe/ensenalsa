@@ -29,6 +29,8 @@ var cams: Array[Camera3D] = []
 var music := AudioStreamPlayer.new()
 var music_on := true
 var floor_numbers := false # count labels on the footprints
+var style: String # target style; `look` eases toward it so switching never snaps
+var look := {}
 var stretch := AudioEffectPitchShift.new()
 var next_seek_ms := 0
 var tick := AudioStreamPlayer.new() # counts are clicked when the music is off
@@ -42,6 +44,10 @@ func _ready() -> void:
 	prev_basic = ch.start_basic
 	cur_basic = ch.start_basic
 	queued = ch.start_basic
+	style = ch.start_style
+	for k in ch.styles[style]:
+		if k != "label":
+			look[k] = ch.styles[style][k]
 	# [eye, look-at] per entry in CAM_NAMES. Dancer stands at the origin facing -Z, right = +X.
 	var r30 := Basis(Vector3.UP, deg_to_rad(30)) # orbit 30° toward the dancer's right
 	for v in [[Vector3(0, 1.5, 2.3), Vector3(0, 0.55, -0.1)], [Vector3(0, 1.5, -2.4), Vector3(0, 0.6, 0)],
@@ -104,7 +110,10 @@ func _process(dt: float) -> void:
 		var st: Dictionary = ch.basics[cur_basic][posmod(roundi(T), 8)]
 		tick.stream = tap_sound if "tap" in st.action.values() else tick_sound
 		tick.play()
-	dancer.apply(pose.feet, pose.pitch, pose.pelvis, ch.p.pelvis_height, pose.dip)
+	for k in look:
+		look[k] = lerpf(look[k], ch.styles[style][k], 1.0 - exp(-dt * 6.0))
+	look.yaw = look.hip_twist * pose.twist
+	dancer.apply(pose.feet, pose.pitch, pose.pelvis, ch.p.pelvis_height, pose.dip, look)
 	ui.play.text = "Pause" if playing else "Play"
 	_update_markers(pose, t)
 	_sync_music()
@@ -295,6 +304,16 @@ func _build_ui() -> void:
 	ui.cam.focus_mode = Control.FOCUS_NONE
 	ui.cam.item_selected.connect(set_camera)
 	_corner(layer, ui.cam, Control.PRESET_TOP_RIGHT)
+
+	# top left: style (how much body movement goes on top of the footwork)
+	var style_box := OptionButton.new()
+	for name in ch.styles:
+		style_box.add_item("Style: " + ch.styles[name].label)
+		if name == style:
+			style_box.select(style_box.item_count - 1)
+	style_box.focus_mode = Control.FOCUS_NONE
+	style_box.item_selected.connect(func(k): style = ch.styles.keys()[k])
+	_corner(layer, style_box, Control.PRESET_TOP_LEFT)
 
 	# bottom centre: transport
 	var transport := HBoxContainer.new()

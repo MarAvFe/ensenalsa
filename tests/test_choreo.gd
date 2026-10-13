@@ -3,6 +3,7 @@ extends SceneTree
 ## Checks over a sequence covering every basic-to-basic switch: the weight-bearing foot never slides, every IK target
 ## is reachable (no knee pop), nothing jumps between samples (no teleporting), and timing is
 ## square: every weight change happens inside the last `weight_phase` of its beat, landing on it.
+## Reach and square shoulders are checked in every style (hip twist moves the hips).
 
 func _initialize() -> void:
 	var ch = load("res://scripts/choreo.gd").new("res://data/routine.json")
@@ -24,14 +25,20 @@ func _initialize() -> void:
 	for k in n + 1:
 		var t := float(k) / n * beats - 1.0
 		var pose: Dictionary = at.call(t)
-		d.apply(pose.feet, pose.pitch, pose.pelvis, ch.p.pelvis_height, pose.dip)
-		for side in ["L", "R"]:
-			var leg: Dictionary = d.legs[side]
-			var f: Vector3 = pose.feet[side]
-			var target: Vector3 = d.global_transform * Vector3(f.x, d.ANKLE_H + f.y, -f.z)
-			if leg.hip.global_position.distance_to(target) > d.THIGH + d.SHIN - 0.002:
+		for st in ch.styles.values():
+			d.apply(pose.feet, pose.pitch, pose.pelvis, ch.p.pelvis_height, pose.dip, {"yaw": st.hip_twist * pose.twist})
+			for side in ["L", "R"]:
+				var leg: Dictionary = d.legs[side]
+				var f: Vector3 = pose.feet[side]
+				var target: Vector3 = d.global_transform * Vector3(f.x, d.ANKLE_H + f.y, -f.z)
+				if leg.hip.global_position.distance_to(target) > d.THIGH + d.SHIN - 0.002:
+					fails += 1
+					printerr("FAIL unreachable %s t=%.3f %s" % [side, t, st.label])
+			if d.spine[2].global_basis.z.dot(Vector3.BACK) < 0.9999: # shoulders always face front
 				fails += 1
-				printerr("FAIL unreachable %s t=%.3f" % [side, t])
+				printerr("FAIL shoulders turned t=%.3f %s" % [t, st.label])
+		for side in ["L", "R"]:
+			var f: Vector3 = pose.feet[side]
 			if prev != null:
 				var share: float = pose.w_r if side == "R" else 1.0 - pose.w_r
 				var prev_share: float = prev.w_r if side == "R" else 1.0 - prev.w_r
