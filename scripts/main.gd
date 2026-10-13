@@ -1,7 +1,10 @@
 extends Node3D
-## Playback: BPM, play/pause, beat stepping, loop, speed multiplier.
+## Playback (BPM, play/pause, beat stepping, loop, speed), footprints, beat counter, weight marker.
 
 const Choreo := preload("res://scripts/choreo.gd")
+const GOLD := Color(1.0, 0.8, 0.2)
+const SIDE_COL := {"L": Color(0.25, 0.45, 0.95), "R": Color(0.95, 0.3, 0.25)}
+const FOOT_FWD := 0.07 # footprint centre sits this far ahead of the ankle
 
 @onready var dancer := $Dancer
 
@@ -13,6 +16,9 @@ var bpm := 100.0
 var speed := 1.0
 
 var ui := {}
+var prints := {} # "side:x,z" -> {mesh, ring}
+var prints_block := -1
+var weight_disc: MeshInstance3D
 
 
 func _ready() -> void:
@@ -20,6 +26,11 @@ func _ready() -> void:
 	bpm = ch.p.bpm
 	t = fposmod(t, ch.size())
 	_build_ui()
+	weight_disc = _flat(CylinderMesh.new(), GOLD, 0.8)
+	weight_disc.mesh.top_radius = 0.13
+	weight_disc.mesh.bottom_radius = 0.13
+	weight_disc.mesh.height = 0.004
+	add_child(weight_disc)
 
 
 func _process(dt: float) -> void:
@@ -32,6 +43,99 @@ func _process(dt: float) -> void:
 	var pose := ch.sample(t)
 	dancer.apply(pose.feet, pose.pitch, pose.w_r, ch.p.pelvis_over_foot, ch.p.pelvis_height, pose.dip)
 	ui.play.text = "Pause" if playing else "Play"
+	_update_markers(pose)
+
+
+## Floor position (Godot) of the footprint for a dancer-frame foot position.
+func _floor_pos(f: Vector3, y := 0.002) -> Vector3:
+	return dancer.global_transform * Vector3(f.x, y, -f.z - FOOT_FWD)
+
+
+func _update_markers(pose: Dictionary) -> void:
+	var i := int(floor(t))
+	var st: Dictionary = pose.state
+	var block := i / 8 * 8
+	if block != prints_block:
+		_build_prints(block)
+	for key in prints:
+		var pr: Dictionary = prints[key]
+		var side: String = key.left(1)
+		var act: String = st.action[side]
+		var active: bool = act in ["step", "place", "tap"] and _key(side, st.feet[side]) == key
+		pr.mesh.material_override.albedo_color.a = 0.85 if active else 0.3
+		if pr.ring:
+			var pulse := 1.0 + 0.8 * (1.0 - (t - i)) if active and act == "tap" else 1.0
+			pr.ring.scale = Vector3(pulse, 1, pulse)
+	var w_side := "R" if pose.w_r >= 0.5 else "L"
+	weight_disc.position = _floor_pos(pose.feet[w_side], 0.001)
+
+	for k in 8:
+		var c := k + 1
+		var lbl: Label = ui.counts[k]
+		var cur: bool = c == st.count
+		var tap := c == 4 or c == 8
+		var col := GOLD if tap else Color(0.85, 0.85, 0.9)
+		lbl.add_theme_color_override("font_color", col if cur else col.darkened(0.55))
+		lbl.add_theme_font_size_override("font_size", 84 if cur else 52)
+	ui.info.text = "%s   •   weight %s" % [st.basic.replace("_", " "), w_side]
+
+
+func _key(side: String, f: Vector3) -> String:
+	return "%s:%.2f,%.2f" % [side, f.x, f.z]
+
+
+## Footprints for the 8-count block starting at state index `block`.
+func _build_prints(block: int) -> void:
+	prints_block = block
+	for pr in prints.values():
+		pr.mesh.queue_free()
+	prints.clear()
+	var counts := {}
+	for st in ch.states.slice(block, block + 8):
+		for side in ["L", "R"]:
+			if st.action[side] in ["step", "place", "tap"]:
+				var key := _key(side, st.feet[side])
+				if not counts.has(key):
+					counts[key] = {"pos": st.feet[side], "counts": [], "tap": false}
+				counts[key].counts.append(st.count)
+				counts[key].tap = counts[key].tap or st.action[side] == "tap"
+	for key in counts:
+		var side: String = key.left(1)
+		var info: Dictionary = counts[key]
+		var box := BoxMesh.new()
+		box.size = Vector3(0.10, 0.004, 0.26)
+		var m := _flat(box, SIDE_COL[side], 0.3)
+		m.position = _floor_pos(Vector3(info.pos.x, 0, info.pos.z))
+		add_child(m)
+		var lbl := Label3D.new()
+		lbl.text = side + "\n" + " ".join(info.counts.map(func(c): return str(c)))
+		lbl.font_size = 32
+		lbl.pixel_size = 0.004
+		lbl.outline_size = 10
+		lbl.rotation_degrees.x = -90
+		lbl.position = Vector3((-0.2 if side == "L" else 0.2), 0.006, 0)
+		m.add_child(lbl)
+		var ring: MeshInstance3D = null
+		if info.tap:
+			var tor := TorusMesh.new()
+			tor.inner_radius = 0.15
+			tor.outer_radius = 0.17
+			ring = _flat(tor, GOLD, 0.9)
+			ring.scale = Vector3.ONE
+			m.add_child(ring)
+		prints[key] = {"mesh": m, "ring": ring}
+
+
+func _flat(mesh: Mesh, col: Color, alpha: float) -> MeshInstance3D:
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(col, alpha)
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
 
 
 func step_beat(dir: int) -> void:
@@ -58,6 +162,26 @@ func _build_ui() -> void:
 	bar.offset_bottom = -8
 	bar.add_theme_constant_override("separation", 8)
 	layer.add_child(bar)
+
+	var top := VBoxContainer.new()
+	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	top.offset_top = 8
+	layer.add_child(top)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 26)
+	top.add_child(row)
+	ui.counts = []
+	for c in range(1, 9):
+		var l := _label(row, str(c))
+		l.custom_minimum_size = Vector2(56, 110)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		l.add_theme_constant_override("outline_size", 8)
+		ui.counts.append(l)
+	ui.info = _label(top, "")
+	ui.info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ui.info.add_theme_font_size_override("font_size", 20)
 
 	ui.play = _button(bar, "Pause", func(): playing = not playing)
 	_button(bar, "< Beat", step_beat.bind(-1))
