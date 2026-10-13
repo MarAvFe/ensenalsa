@@ -20,6 +20,9 @@ var prints := {} # "side:x,z" -> {mesh, ring}
 var prints_block := -1
 var weight_disc: MeshInstance3D
 var cams: Array[Camera3D] = []
+var music := AudioStreamPlayer.new()
+var music_on := true
+var stretch := AudioEffectPitchShift.new()
 
 
 func _ready() -> void:
@@ -38,6 +41,13 @@ func _ready() -> void:
 		cams.append(cam)
 	_build_ui()
 	set_camera(0)
+	var stream: AudioStreamMP3 = load(ch.p.music)
+	stream.loop = true
+	stream.bpm = ch.p.music_bpm
+	stream.beat_count = int(ch.p.music_beats) # loop on the beat grid, not the mp3's padded end
+	music.stream = stream
+	add_child(music)
+	AudioServer.add_bus_effect(0, stretch)
 	weight_disc = _flat(CylinderMesh.new(), GOLD, 0.8)
 	weight_disc.mesh.top_radius = 0.13
 	weight_disc.mesh.bottom_radius = 0.13
@@ -56,6 +66,30 @@ func _process(dt: float) -> void:
 	dancer.apply(pose.feet, pose.pitch, pose.w_r, ch.p.pelvis_over_foot, ch.p.pelvis_height, pose.dip)
 	ui.play.text = "Pause" if playing else "Play"
 	_update_markers(pose)
+	_sync_music()
+
+
+## Music follows the dance clock: count 1 of the routine = music beat 0. Tempo is
+## time-stretched to bpm*speed with pitch kept by the PitchShift effect.
+func _sync_music() -> void:
+	if not (playing and music_on):
+		music.stream_paused = true
+		return
+	var rate: float = bpm * speed / ch.p.music_bpm
+	music.pitch_scale = rate
+	stretch.pitch_scale = 1.0 / rate
+	var beats: float = ch.p.music_beats
+	var want: float = fposmod(t, beats) * 60.0 / ch.p.music_bpm + ch.p.music_offset
+	var length: float = beats * 60.0 / ch.p.music_bpm
+	if not music.playing:
+		music.play(want)
+	music.stream_paused = false
+	var heard := music.get_playback_position() + (AudioServer.get_time_since_last_mix() - AudioServer.get_output_latency()) * rate
+	var err := wrapf(heard - want, -length / 2.0, length / 2.0)
+	if absf(err) > 0.25:
+		music.seek(want) # after a jump (beat step, resume): realign the audio once
+	else:
+		t += err * ch.p.music_bpm / 60.0 * 0.05 # otherwise ease the dance clock onto the audio, no audible seeks
 
 
 ## Floor position (Godot) of the footprint for a dancer-frame foot position.
@@ -170,6 +204,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		KEY_RIGHT: step_beat(1)
 		KEY_LEFT: step_beat(-1)
 		KEY_1, KEY_2, KEY_3: set_camera(e.keycode - KEY_1)
+		KEY_M: ui.music.button_pressed = not music_on
 
 
 func _build_ui() -> void:
@@ -202,6 +237,11 @@ func _build_ui() -> void:
 	ui.info = _label(top, "")
 	ui.info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ui.info.add_theme_font_size_override("font_size", 20)
+	var credit := _label(layer, "Music: \"Salsa 90 BPM\" by TheLastOneOnEarth (freesound.org), CC BY 4.0")
+	credit.add_theme_font_size_override("font_size", 11)
+	credit.modulate.a = 0.6
+	credit.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 8)
+	credit.position.y -= 44 # sit above the control bar
 
 	ui.play = _button(bar, "Pause", func(): playing = not playing)
 	_button(bar, "< Beat", step_beat.bind(-1))
@@ -212,6 +252,13 @@ func _build_ui() -> void:
 	loop.toggled.connect(func(on): looping = on)
 	loop.focus_mode = Control.FOCUS_NONE
 	bar.add_child(loop)
+
+	ui.music = CheckBox.new()
+	ui.music.text = "Music"
+	ui.music.button_pressed = music_on
+	ui.music.toggled.connect(func(on): music_on = on)
+	ui.music.focus_mode = Control.FOCUS_NONE
+	bar.add_child(ui.music)
 
 	_label(bar, "BPM")
 	var bpm_box := SpinBox.new()
@@ -251,7 +298,7 @@ func _button(parent: Control, text: String, cb: Callable) -> Button:
 	return b
 
 
-func _label(parent: Control, text: String) -> Label:
+func _label(parent: Node, text: String) -> Label:
 	var l := Label.new()
 	l.text = text
 	parent.add_child(l)

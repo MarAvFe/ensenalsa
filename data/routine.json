@@ -9,7 +9,11 @@
     "pelvis_height": 0.93,
     "pelvis_over_foot": 0.85,
     "pelvis_dip": 0.03,
-    "bpm": 100
+    "bpm": 100,
+    "music": "res://assets/salsa_90bpm.mp3",
+    "music_bpm": 90,
+    "music_beats": 16,
+    "music_offset": 0.0
   },
   "routine": ["diagonal_basic", "diagonal_basic", "inline_basic"],
   "basics": {
