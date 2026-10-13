@@ -1,7 +1,7 @@
 extends RefCounted
 ## Routine data -> per-beat foot states -> continuous pose sampling.
-## Beat i is the instant the dancer lands count states[i]; between beats i and i+1
-## the move is split into ordered segments so a foot never moves while it holds weight.
+## Beat i is the instant the dancer lands count states[i]; each move is split into ordered
+## segments so a foot never moves while it holds weight.
 
 const SIDES := ["L", "R"]
 
@@ -67,38 +67,74 @@ func segments(a: Dictionary, b: Dictionary) -> Array:
 	return segs
 
 
+## [up to and including the key segment, after it]. The key is the last weight change
+## (or the last move when weight stays), so it is what lands on the beat.
+static func _split(segs: Array) -> Array:
+	var k := segs.size() - 1
+	for j in segs.size():
+		if segs[j][0] == "w":
+			k = j
+	return [segs.slice(0, k + 1), segs.slice(k + 1)]
+
+
 ## Pose at time t (beats, already wrapped into [0, size())).
+## Square timing: the key event of every count lands exactly on its beat, the weight change
+## always takes the last `weight_phase` of the beat, and moves that must wait for the weight
+## to leave a foot (releases) play out in the first `release_phase` of the next beat.
 func sample(t: float) -> Dictionary:
+	var n := states.size()
 	var i := int(floor(t))
-	var a: Dictionary = states[i]
-	var b: Dictionary = states[(i + 1) % states.size()]
 	var s := t - i
-	var feet: Dictionary = a.feet.duplicate()
-	var pitch := {"L": 0.0, "R": 0.0}
-	var w_r := 1.0 if a.weight == "R" else 0.0
-	var dip := 0.0
-	var segs := segments(a, b)
+	var z: Dictionary = states[(i - 1 + n) % n]
+	var a: Dictionary = states[i]
+	var b: Dictionary = states[(i + 1) % n]
+	var out := {"feet": a.feet.duplicate(), "pitch": {"L": 0.0, "R": 0.0},
+		"w_r": 1.0 if a.weight == "R" else 0.0, "dip": 0.0, "state": a}
+
+	var t0 := 0.0
+	var rel: Array = _split(segments(z, a))[1]
+	if not rel.is_empty():
+		t0 = p.release_phase
+		for g in rel:
+			out.feet[g[1]] = z.feet[g[1]] # not released yet at the beat
+		_play(rel, z, a, s, 0.0, t0, out)
+
+	var pre: Array = _split(segments(a, b))[0]
+	if pre.is_empty():
+		return out
+	var key: Array = pre.back()
+	if key[0] == "w":
+		var w_start := 1.0 - float(p.weight_phase)
+		_play(pre.slice(0, -1), a, b, s, t0, w_start, out)
+		_play([key], a, b, s, w_start, 1.0, out)
+	else:
+		_play(pre, a, b, s, t0, 1.0, out)
+	return out
+
+
+## Play segments (moves from state a to b) one after another inside [from, to] of the beat.
+func _play(segs: Array, a: Dictionary, b: Dictionary, s: float, from: float, to: float, out: Dictionary) -> void:
 	var total := 0.0
 	for g in segs:
 		total += 1.0 if g[0] == "m" else 0.6
-	var start := 0.0
+	var start := from
 	for g in segs:
-		var dur := (1.0 if g[0] == "m" else 0.6) / total
-		var u := clampf((s - start) / dur, 0.0, 1.0)
-		var e := smoothstep(0.0, 1.0, u)
-		var bump := sin(PI * u)
-		var side: String = g[1]
-		if g[0] == "w":
-			w_r = lerpf(w_r, 1.0 if side == "R" else 0.0, e)
-			dip = maxf(dip, p.pelvis_dip * bump)
-		else:
-			var f0: Vector3 = a.feet[side]
-			var f1: Vector3 = b.feet[side]
-			var tap: bool = b.action[side] == "tap"
-			var moved := Vector2(f0.x, f0.z).distance_to(Vector2(f1.x, f1.z)) > 0.001
-			var arc: float = p.tap_height if tap else (p.step_arc if moved else 0.0)
-			feet[side] = f0.lerp(f1, e) + Vector3(0, arc * bump, 0)
-			if tap:
-				pitch[side] = -p.tap_pitch * bump
+		var dur := (1.0 if g[0] == "m" else 0.6) / total * (to - from)
+		if s > start:
+			var u := clampf((s - start) / dur, 0.0, 1.0)
+			var e := smoothstep(0.0, 1.0, u)
+			var bump := sin(PI * u)
+			var side: String = g[1]
+			if g[0] == "w":
+				out.w_r = lerpf(out.w_r, 1.0 if side == "R" else 0.0, e)
+				out.dip = maxf(out.dip, p.pelvis_dip * bump)
+			else:
+				var f0: Vector3 = a.feet[side]
+				var f1: Vector3 = b.feet[side]
+				var tap: bool = b.action[side] == "tap"
+				var moved := Vector2(f0.x, f0.z).distance_to(Vector2(f1.x, f1.z)) > 0.001
+				var arc: float = p.tap_height if tap else (p.step_arc if moved else 0.0)
+				out.feet[side] = f0.lerp(f1, e) + Vector3(0, arc * bump, 0)
+				if tap:
+					out.pitch[side] = -p.tap_pitch * bump
 		start += dur
-	return {"feet": feet, "pitch": pitch, "w_r": w_r, "dip": dip, "state": a}

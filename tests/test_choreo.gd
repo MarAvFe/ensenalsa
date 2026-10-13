@@ -1,7 +1,8 @@
 extends SceneTree
 ## Run: godot --headless --path . -s res://tests/test_choreo.gd
 ## Checks over the whole routine: the weight-bearing foot never slides, every IK target
-## is reachable (no knee pop), and nothing jumps between samples (no teleporting).
+## is reachable (no knee pop), nothing jumps between samples (no teleporting), and timing is
+## square: every weight change happens inside the last `weight_phase` of its beat, landing on it.
 
 func _initialize() -> void:
 	var ch = load("res://scripts/choreo.gd").new("res://data/routine.json")
@@ -33,5 +34,14 @@ func _initialize() -> void:
 					fails += 1
 					printerr("FAIL %s jumped %.3f at t=%.3f" % [side, moved, t])
 		prev = pose
+	var n_beats: int = ch.size()
+	for i in n_beats:
+		var now: float = ch.sample(float(i)).w_r
+		var want := 1.0 if ch.states[i].weight == "R" else 0.0
+		var before: float = ch.sample(fposmod(i - ch.p.weight_phase - 0.01, n_beats)).w_r
+		var changes: bool = ch.states[i].weight != ch.states[(i - 1 + n_beats) % n_beats].weight
+		if absf(now - want) > 1e-4 or (changes and absf(before - now) < 0.99):
+			fails += 1
+			printerr("FAIL beat %d: weight not landing on the beat (before=%.2f now=%.2f)" % [i, before, now])
 	print("Choreo test (%d beats): %s" % [ch.size(), "PASS" if fails == 0 else "%d FAILS" % fails])
 	quit(fails)

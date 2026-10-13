@@ -23,6 +23,7 @@ var cams: Array[Camera3D] = []
 var music := AudioStreamPlayer.new()
 var music_on := true
 var stretch := AudioEffectPitchShift.new()
+var next_seek_ms := 0
 
 
 func _ready() -> void:
@@ -46,6 +47,9 @@ func _ready() -> void:
 	stream.bpm = ch.p.music_bpm
 	stream.beat_count = int(ch.p.music_beats) # loop on the beat grid, not the mp3's padded end
 	music.stream = stream
+	# Web defaults to browser-native samples, which report no playback position: the sync then
+	# re-seeked every frame (heard as buzzing). Engine-mixed streams report it and allow the effect.
+	music.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	add_child(music)
 	AudioServer.add_bus_effect(0, stretch)
 	weight_disc = _flat(CylinderMesh.new(), GOLD, 0.8)
@@ -87,7 +91,9 @@ func _sync_music() -> void:
 	var heard := music.get_playback_position() + (AudioServer.get_time_since_last_mix() - AudioServer.get_output_latency()) * rate
 	var err := wrapf(heard - want, -length / 2.0, length / 2.0)
 	if absf(err) > 0.25:
-		music.seek(want) # after a jump (beat step, resume): realign the audio once
+		if Time.get_ticks_msec() >= next_seek_ms: # never seek in a tight loop
+			next_seek_ms = Time.get_ticks_msec() + 1000
+			music.seek(want) # after a jump (beat step, resume): realign the audio once
 	else:
 		t += err * ch.p.music_bpm / 60.0 * 0.05 # otherwise ease the dance clock onto the audio, no audible seeks
 
