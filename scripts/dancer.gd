@@ -52,6 +52,19 @@ func _ready() -> void:
 		solve_leg(side, global_transform * Vector3(0.18 * sx, ANKLE_H, 0))
 
 
+## Pose the dancer. `feet` maps "L"/"R" to dancer-frame Vector3(x, lift, z) of the sole,
+## `pitch` maps side to foot pitch, `w_r` is weight on R (0 = all L, 1 = all R),
+## `over` is how far the pelvis travels toward the weighted foot (0.5..1), `dip` lowers it.
+func apply(feet: Dictionary, pitch: Dictionary, w_r: float, over: float, height: float, dip: float) -> void:
+	var l: Vector3 = feet.L
+	var r: Vector3 = feet.R
+	var c := l.lerp(r, (1.0 - over) + (2.0 * over - 1.0) * w_r)
+	pelvis.position = Vector3(c.x, height - dip, -c.z)
+	for side in ["L", "R"]:
+		var f: Vector3 = feet[side]
+		solve_leg(side, global_transform * Vector3(f.x, ANKLE_H + f.y, -f.z), pitch.get(side, 0.0))
+
+
 ## Two-bone IK: place the ankle of `side` at world `target`, knee bending forward.
 ## `pitch` is the foot's rotation about the dancer's lateral axis (+ = toe up).
 func solve_leg(side: String, target: Vector3, pitch := 0.0) -> void:
