@@ -49,6 +49,31 @@ func _ready() -> void:
 		var ankle := _joint(knee, "Foot" + side, Vector3(0, -SHIN, 0))
 		_box(ankle, Vector3(0.10, 0.06, 0.26), Vector3(0, -ANKLE_H + 0.03, -0.07), col)
 		legs[side] = {"hip": hip, "knee": knee, "ankle": ankle}
+		solve_leg(side, global_transform * Vector3(0.18 * sx, ANKLE_H, 0))
+
+
+## Two-bone IK: place the ankle of `side` at world `target`, knee bending forward.
+## `pitch` is the foot's rotation about the dancer's lateral axis (+ = toe up).
+func solve_leg(side: String, target: Vector3, pitch := 0.0) -> void:
+	var leg: Dictionary = legs[side]
+	var hip_p: Vector3 = leg.hip.global_position
+	var to := target - hip_p
+	var d := clampf(to.length(), 0.01, THIGH + SHIN - 0.001)
+	var dir := to.normalized()
+	var fwd := global_basis * Vector3.FORWARD
+	var pole := (fwd - dir * fwd.dot(dir)).normalized()
+	var a := (THIGH * THIGH - SHIN * SHIN + d * d) / (2.0 * d) # law of cosines along hip->ankle
+	var knee_p := hip_p + dir * a + pole * sqrt(maxf(THIGH * THIGH - a * a, 0.0))
+	leg.hip.global_basis = _bone_basis(hip_p, knee_p, fwd)
+	leg.knee.global_basis = _bone_basis(knee_p, hip_p + dir * d, fwd)
+	leg.ankle.global_basis = global_basis * Basis(Vector3.RIGHT, pitch)
+
+
+## Basis whose -Y runs from `from` to `to` and whose -Z leans toward `fwd`.
+func _bone_basis(from: Vector3, to: Vector3, fwd: Vector3) -> Basis:
+	var y := (from - to).normalized()
+	var z := (-fwd - y * (-fwd).dot(y)).normalized()
+	return Basis(y.cross(z), y, z)
 
 
 func _joint(parent: Node3D, n: String, pos: Vector3) -> Node3D:
