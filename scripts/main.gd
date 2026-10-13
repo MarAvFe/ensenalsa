@@ -19,13 +19,25 @@ var ui := {}
 var prints := {} # "side:x,z" -> {mesh, ring}
 var prints_block := -1
 var weight_disc: MeshInstance3D
+var cams: Array[Camera3D] = []
 
 
 func _ready() -> void:
 	ch = Choreo.new("res://data/routine.json")
 	bpm = ch.p.bpm
 	t = fposmod(t, ch.size())
+	# Behind, front, head-down-to-feet. Dancer stands at the origin facing -Z.
+	for v in [[Vector3(0, 1.5, 2.3), Vector3(0, 0.55, -0.1)], [Vector3(0, 1.5, -2.4), Vector3(0, 0.6, 0)],
+			[Vector3(0, 1.78, 0.32), Vector3(0, 0, -0.18)]]:
+		var cam := Camera3D.new()
+		cam.near = 0.03
+		if cams.size() == 2:
+			cam.cull_mask = 1 # feet cam skips the upper body (layer 2)
+		add_child(cam)
+		cam.look_at_from_position(v[0], v[1])
+		cams.append(cam)
 	_build_ui()
+	set_camera(0)
 	weight_disc = _flat(CylinderMesh.new(), GOLD, 0.8)
 	weight_disc.mesh.top_radius = 0.13
 	weight_disc.mesh.bottom_radius = 0.13
@@ -113,7 +125,8 @@ func _build_prints(block: int) -> void:
 		lbl.pixel_size = 0.004
 		lbl.outline_size = 10
 		lbl.rotation_degrees.x = -90
-		lbl.position = Vector3((-0.2 if side == "L" else 0.2), 0.006, 0)
+		lbl.modulate = SIDE_COL[side].lightened(0.5)
+		lbl.position = Vector3(signf(info.pos.x) * 0.2, 0.006, 0) # outward, so crossed steps don't swap labels
 		m.add_child(lbl)
 		var ring: MeshInstance3D = null
 		if info.tap:
@@ -143,6 +156,12 @@ func step_beat(dir: int) -> void:
 	t = fposmod(roundf(t) + dir, ch.size())
 
 
+func set_camera(k: int) -> void:
+	cams[k].make_current()
+	for j in 3:
+		ui.cam_buttons[j].button_pressed = j == k
+
+
 func _unhandled_key_input(e: InputEvent) -> void:
 	if not e.is_pressed():
 		return
@@ -150,6 +169,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		KEY_SPACE: playing = not playing
 		KEY_RIGHT: step_beat(1)
 		KEY_LEFT: step_beat(-1)
+		KEY_1, KEY_2, KEY_3: set_camera(e.keycode - KEY_1)
 
 
 func _build_ui() -> void:
@@ -212,6 +232,14 @@ func _build_ui() -> void:
 	sl.focus_mode = Control.FOCUS_NONE
 	sl.value_changed.connect(func(v): speed = v; speed_lbl.text = "Speed %.2fx" % v)
 	bar.add_child(sl)
+
+	ui.cam_buttons = []
+	var group := ButtonGroup.new()
+	for k in 3:
+		var b := _button(bar, ["1 Behind", "2 Front", "3 Feet"][k], set_camera.bind(k))
+		b.toggle_mode = true
+		b.button_group = group
+		ui.cam_buttons.append(b)
 
 
 func _button(parent: Control, text: String, cb: Callable) -> Button:
