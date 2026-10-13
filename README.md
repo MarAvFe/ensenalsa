@@ -1,6 +1,32 @@
-# ensenalsa
+# Enseñalsa
 
-A lean salsa teaching tool. A dancer built from primitive shapes performs salsa basics, with footprints, a beat counter that shows all 8 counts (the tap counts 4 and 8 in gold), a weight marker, and three camera views. Built with Godot 4.7 using the Compatibility renderer, so it runs in a browser.
+**Learn the salsa basic by watching it, one count at a time.**
+
+Enseñalsa (*enseña* + *salsa*, "teach salsa") is a small 3D practice tool for the salsa basic. A simple figure dances it while the screen counts **1 2 3 4 5 6 7 8** with you. Every count is shown, and the taps on **4** and **8** are highlighted in gold, so you always have something to anchor on.
+
+![A leader and a see-through follower dancing the diagonal basic](docs/screenshots/couple.jpg)
+
+## What you can do
+
+**Slow it down and step through it.** Play at full tempo, drop to a quarter speed, or pause and glide one count forward or back with the arrow keys. Footprints on the floor show where each foot goes, and a gold disc shows which foot carries the weight. You can switch on the count numbers for each footprint too.
+
+![The leader alone from behind, mid back-step on count 5, with the settings open and floor numbers on](docs/screenshots/teaching-view.jpg)
+
+**Pick a basic, and switch on the 1.** Diagonal, Front-back and Sides. Choose another basic at any time: the dancer finishes the current eight counts and changes on the next count 1, never mid-phrase.
+
+**Watch the feet up close.** Eight camera angles, including one from the dancer's own head looking down at the feet and a low side view. The tap lands on the tip of the toes, heel up.
+
+![Side close-up of the feet: the right foot taps the floor with the toe on count 4](docs/screenshots/toe-tap.jpg)
+
+**Dance with a partner.** Turn on the follower and she dances the matching basic in front, holding hands. Switch the **main** dancer to see everything from her side; the other dancer turns see-through. Before a change of basic, the leader prepares on count 8: his hands glow and his arms draw away from the next step, and she is led along.
+
+![The follower's point of view on count 8: the leader's hands glow to prepare the change to Front-back](docs/screenshots/follower-view.jpg)
+
+**Choose a style.** *Flat* shows the footwork alone. *Natural* adds folded arms with fists at the chest and a hip twist on the steps, with the shoulders always square to the front.
+
+**Music or a click.** A looping salsa track keeps time at whatever tempo you pick. Turn it off and you get a click on every count, with a brighter tap sound on 4 and 8.
+
+*Spin* (the yellow button) is experimental: it works, but it still needs tuning.
 
 ## Run
 
