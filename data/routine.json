@@ -1,0 +1,27 @@
+{
+  "params": {
+    "home_L": [-0.18, 0],
+    "home_R": [0.18, 0],
+    "lift": 0.04,
+    "step_arc": 0.04,
+    "tap_height": 0.10,
+    "tap_pitch": 0.45,
+    "pelvis_height": 0.93,
+    "pelvis_over_foot": 0.85,
+    "pelvis_dip": 0.03,
+    "bpm": 100
+  },
+  "routine": ["diagonal_basic"],
+  "basics": {
+    "diagonal_basic": [
+      {"count": 1, "weight": "R", "L": {"target": [-0.18, 0], "action": "lift"},  "R": {"target": [-0.10, -0.30], "action": "step"}},
+      {"count": 2, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},  "R": {"target": [0.18, 0], "action": "place"}},
+      {"count": 3, "weight": "R", "L": {"target": [-0.18, 0], "action": "lift"},  "R": {"target": [0.18, 0], "action": "step"}},
+      {"count": 4, "weight": "R", "L": {"target": [-0.18, 0], "action": "tap"},   "R": {"target": [0.18, 0], "action": "hold"}},
+      {"count": 5, "weight": "L", "L": {"target": [0.10, -0.30], "action": "step"}, "R": {"target": [0.18, 0], "action": "lift"}},
+      {"count": 6, "weight": "R", "L": {"target": [-0.18, 0], "action": "place"}, "R": {"target": [0.18, 0], "action": "step"}},
+      {"count": 7, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},  "R": {"target": [0.18, 0], "action": "lift"}},
+      {"count": 8, "weight": "L", "L": {"target": [-0.18, 0], "action": "hold"},  "R": {"target": [0.18, 0], "action": "tap"}}
+    ]
+  }
+}
