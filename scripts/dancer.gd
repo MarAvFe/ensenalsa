@@ -18,7 +18,11 @@ const UPPER_ARM := 0.30
 const FOREARM := 0.27
 
 @export var head_color := Color(0.55, 0.3, 0.8) # leader purple; the follower sets orange
-@export var dim := 0.0 # darkens every colour (the follower is dimmer so the leader reads first)
+@export var hand_color := Color(0.9, 0.12, 0.12) # leader: red, slightly bigger hands that lead
+@export var hand_size := 0.055
+
+var mats: Array[StandardMaterial3D] = [] # every body material, for set_alpha
+var halos: Array[MeshInstance3D] = [] # glow around the hands, for set_halo
 
 var pelvis: Node3D
 var legs := {} # "L"/"R" -> {hip, knee, ankle}
@@ -50,6 +54,21 @@ func _ready() -> void:
 		_capsule(ua, UPPER_ARM, 0.04, COL_BODY)
 		var fa := _joint(ua, "Forearm" + side, Vector3(0, -UPPER_ARM, 0))
 		_capsule(fa, FOREARM, 0.035, COL_BODY)
+		_sphere(fa, hand_size, Vector3(0, -FOREARM, 0), hand_color)
+		var glow := StandardMaterial3D.new()
+		glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		glow.albedo_color = Color(1.0, 0.85, 0.3, 0.0)
+		var halo := MeshInstance3D.new()
+		halo.mesh = SphereMesh.new()
+		halo.mesh.radius = 0.11
+		halo.mesh.height = 0.22
+		halo.material_override = glow
+		halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		halo.position.y = -FOREARM
+		halo.visible = false
+		fa.add_child(halo)
+		halos.append(halo)
 		arms[side] = {"upper": ua, "fore": fa}
 
 		var hip := _joint(pelvis, "Thigh" + side, Vector3(HIP_X * sx, -HIP_DROP, 0))
@@ -167,8 +186,25 @@ func _joint(parent: Node3D, n: String, pos: Vector3) -> Node3D:
 
 func _mat(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
-	m.albedo_color = c.darkened(dim)
+	m.albedo_color = c
+	mats.append(m)
 	return m
+
+
+## See-through body (the dancer who is not the main character). 1 = opaque.
+func set_alpha(a: float) -> void:
+	for m in mats:
+		m.albedo_color.a = a
+		# depth pre-pass keeps a see-through body from showing its own back faces through itself
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS if a < 0.999 else BaseMaterial3D.TRANSPARENCY_DISABLED
+
+
+## Glow around the hands, 0..1 (the leader signals a coming basic change on count 8).
+func set_halo(a: float) -> void:
+	for h in halos:
+		h.visible = a > 0.01
+		h.material_override.albedo_color.a = 0.5 * a
+		h.scale = Vector3.ONE * (0.7 + 0.5 * a)
 
 
 ## Capsule from the joint along -Y (or +Y when up) for `length`.

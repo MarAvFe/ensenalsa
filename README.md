@@ -26,9 +26,10 @@ The export uses the single-threaded web template, so it needs no special COOP/CO
 | Where | Control | Action |
 |---|---|---|
 | bottom centre | `< Beat` / `Pause` / `Beat >` (← / Space / →) | glide one count back / play-pause / glide one count forward |
-| bottom right | `Diagonal` / `Front-back` / `Sides` | queue a basic; the dancer switches on the next count 1 |
+| bottom right | `Diagonal` / `Front-back` / `Sides` | queue a basic; the dancers switch on the next count 1, and on count 8 before it the leader's hands glow to prepare the change |
 | top left | style dropdown | **Flat** (footwork only) or **Natural** (arms folded with elbows at belly and fists at chest height, hips twist with the steps while the shoulders stay square). Switching blends smoothly. |
-| top left | Follower toggle (F) | the follower (orange head, dimmer colours) dances the basic in front of the leader (purple head), holding hands; cameras centre on the couple |
+| top left | Follower toggle (F) | the follower (orange head) dances the basic in front of the leader (purple head, red hands), holding hands; cameras centre on the couple |
+| top left | Main (P) | whose point of view: cameras, footprints and weight marker follow the main dancer; the other one is see-through |
 | top right | camera dropdown (1–6) | behind, front, head-down-to-feet (hips and up hidden), feet close-up from the side, behind 30°, front 30° |
 | bottom left | gear | Loop (off = stop on count 8), Music (M; when off, every count clicks and tap counts sound a higher tap), Floor numbers (count labels on the footprints, off by default), BPM (default 100), Speed 0.25x–1x |
 

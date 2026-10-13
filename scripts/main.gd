@@ -24,7 +24,7 @@ var speed := 1.0
 
 var ui := {}
 var prints := {} # "side:x,z" -> {mesh, ring, label}
-var prints_basic := ""
+var prints_basic := "" # "basic|role" the footprints were built for
 var weight_disc: MeshInstance3D
 var cams: Array[Camera3D] = []
 var music := AudioStreamPlayer.new()
@@ -33,7 +33,9 @@ var floor_numbers := false # count labels on the footprints
 var style: String # target style; `look` eases toward it so switching never snaps
 var look := {}
 var follower: Node3D
-var rig := Node3D.new() # cameras that frame the couple: centred between them when the follower dances
+var main_is_follower := false # whose point of view: cameras, footprints and weight follow the main dancer
+var pov := Node3D.new() # eases onto the main dancer's transform; all cameras hang under it
+var rig := Node3D.new() # under pov: cameras that frame the couple, centred between them when both dance
 var stretch := AudioEffectPitchShift.new()
 var next_seek_ms := 0
 var tick := AudioStreamPlayer.new() # counts are clicked when the music is off
@@ -51,7 +53,8 @@ func _ready() -> void:
 	for k in ch.styles[style]:
 		if k != "label":
 			look[k] = ch.styles[style][k]
-	add_child(rig)
+	add_child(pov)
+	pov.add_child(rig)
 	# [eye, look-at] per entry in CAM_NAMES. Dancer stands at the origin facing -Z, right = +X.
 	var r30 := Basis(Vector3.UP, deg_to_rad(30)) # orbit 30° toward the dancer's right
 	for v in [[Vector3(0, 1.5, 2.3), Vector3(0, 0.55, -0.1)], [Vector3(0, 1.5, -2.4), Vector3(0, 0.6, 0)],
@@ -63,7 +66,7 @@ func _ready() -> void:
 			cam.cull_mask = 1 # feet cam skips the upper body (layer 2)
 		if cams.size() == 3:
 			cam.fov = 38 # side close-up from far enough to keep wide steps in frame
-		(self if cams.size() == 2 else rig).add_child(cam) # the head-down cam stays the leader's view
+		(pov if cams.size() == 2 else rig).add_child(cam) # the head-down cam stays the main dancer's view
 		cam.look_at_from_position(v[0], v[1])
 		cams.append(cam)
 	_build_ui()
@@ -83,10 +86,12 @@ func _ready() -> void:
 	follower = Dancer.new()
 	follower.name = "Follower"
 	follower.head_color = Color(1.0, 0.55, 0.1)
-	follower.dim = 0.35
+	follower.hand_color = Dancer.COL_BODY
+	follower.hand_size = 0.042
 	follower.position = Vector3(0, 0, -ch.p.partner_distance) # in front of the leader, facing him
 	follower.rotation.y = PI
 	add_child(follower)
+	set_main(false)
 	weight_disc = _flat(CylinderMesh.new(), GOLD, 0.8)
 	weight_disc.mesh.top_radius = 0.13
 	weight_disc.mesh.bottom_radius = 0.13
@@ -125,10 +130,20 @@ func _process(dt: float) -> void:
 		look[k] = lerpf(look[k], ch.styles[style][k], 1.0 - exp(-dt * 6.0))
 	look.yaw = look.hip_twist * pose.twist
 	dancer.apply(pose.feet, pose.pitch, pose.pelvis, ch.p.pelvis_height, pose.dip, look)
+	var ease := 1.0 - exp(-dt * 4.0)
 	var centre: float = -ch.p.partner_distance / 2.0 if follower.visible else 0.0
-	rig.position.z = lerpf(rig.position.z, centre, 1.0 - exp(-dt * 4.0))
+	rig.position.z = lerpf(rig.position.z, centre, ease)
+	pov.transform = pov.transform.interpolate_with(main_dancer().transform, ease)
+	# count 8 with a different basic queued: the leader's hands glow to prepare the change
+	var prep := 0.0
+	if queued != cur_basic:
+		prep = smoothstep(6.5, 7.0, t) * (1.0 - smoothstep(7.6, 8.0, t)) * (0.8 + 0.2 * sin(TAU * 2.0 * t))
+	dancer.set_halo(prep)
+	var main_pose := pose
 	if follower.visible:
 		var m := ch.sample(t, prev_basic, cur_basic, queued, true)
+		if main_is_follower:
+			main_pose = m
 		var look_f := look.duplicate()
 		look_f.yaw = look.hip_twist * m.twist
 		follower.apply(m.feet, m.pitch, m.pelvis, ch.p.pelvis_height, m.dip, look_f)
@@ -140,7 +155,7 @@ func _process(dt: float) -> void:
 			dancer.hold(side, at, h)
 			follower.hold(other, at, h)
 	ui.play.text = "Pause" if playing else "Play"
-	_update_markers(pose, t)
+	_update_markers(main_pose, t)
 	_sync_music()
 
 
@@ -171,13 +186,27 @@ func _sync_music() -> void:
 
 ## Floor position (Godot) of the footprint for a dancer-frame foot position.
 func _floor_pos(f: Vector3, y := 0.002) -> Vector3:
-	return dancer.global_transform * Vector3(f.x, y, -f.z - FOOT_FWD)
+	return main_dancer().global_transform * Vector3(f.x, y, -f.z - FOOT_FWD)
+
+
+func main_dancer() -> Node3D:
+	return follower if main_is_follower else dancer
+
+
+## Choose the main dancer; the other one turns see-through. The follower must be dancing to be main.
+func set_main(is_follower: bool) -> void:
+	main_is_follower = is_follower and follower.visible
+	dancer.set_alpha(0.3 if main_is_follower else 1.0)
+	follower.set_alpha(1.0 if main_is_follower else 0.3)
+	if ui.has("main"):
+		ui.main.set_pressed_no_signal(main_is_follower)
+		ui.main.text = "Main: %s  (P)" % ("Follower" if main_is_follower else "Leader")
 
 
 func _update_markers(pose: Dictionary, t: float) -> void:
 	var i := int(floor(t))
 	var st: Dictionary = pose.state
-	if cur_basic != prints_basic:
+	if "%s|%s" % [cur_basic, main_is_follower] != prints_basic:
 		_build_prints(cur_basic)
 	for key in prints:
 		var pr: Dictionary = prints[key]
@@ -199,7 +228,7 @@ func _update_markers(pose: Dictionary, t: float) -> void:
 		var col := GOLD if tap else Color(0.85, 0.85, 0.9)
 		lbl.add_theme_color_override("font_color", col if cur else col.darkened(0.55))
 		lbl.add_theme_font_size_override("font_size", 84 if cur else 52)
-	ui.info.text = "%s   •   weight %s" % [ch.labels[cur_basic], w_side]
+	ui.info.text = ch.labels[cur_basic]
 	if queued != cur_basic:
 		ui.info.text += "   •   %s on the next 1" % ch.labels[queued]
 
@@ -210,12 +239,12 @@ func _key(side: String, f: Vector3) -> String:
 
 ## Footprints for one basic.
 func _build_prints(basic: String) -> void:
-	prints_basic = basic
+	prints_basic = "%s|%s" % [basic, main_is_follower]
 	for pr in prints.values():
 		pr.mesh.queue_free()
 	prints.clear()
 	var counts := {}
-	for st in ch.basics[basic]:
+	for st in (ch.follower if main_is_follower else ch.basics)[basic]:
 		for side in ["L", "R"]:
 			if st.action[side] in ["step", "place", "tap"]:
 				var key := _key(side, st.feet[side])
@@ -229,7 +258,7 @@ func _build_prints(basic: String) -> void:
 		var box := BoxMesh.new()
 		box.size = Vector3(0.10, 0.004, 0.26)
 		var m := _flat(box, SIDE_COL[side], 0.3)
-		m.position = _floor_pos(Vector3(info.pos.x, 0, info.pos.z))
+		m.transform = Transform3D(main_dancer().global_basis, _floor_pos(Vector3(info.pos.x, 0, info.pos.z))) # labels read from the main POV
 		add_child(m)
 		var lbl := Label3D.new()
 		lbl.text = side + "\n" + " ".join(info.counts.map(func(c): return str(c)))
@@ -296,6 +325,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6: set_camera(e.keycode - KEY_1)
 		KEY_M: ui.music.button_pressed = not music_on
 		KEY_F: ui.follower.button_pressed = not follower.visible
+		KEY_P: set_main(not main_is_follower)
 
 
 func _build_ui() -> void:
@@ -344,7 +374,11 @@ func _build_ui() -> void:
 	ui.follower = _button(top_left, "Follower  (F)", func(): pass)
 	ui.follower.toggle_mode = true
 	ui.follower.button_pressed = true
-	ui.follower.toggled.connect(func(on): follower.visible = on)
+	ui.follower.toggled.connect(func(on):
+		follower.visible = on
+		set_main(main_is_follower)) # hiding the follower hands the main role back to the leader
+	ui.main = _button(top_left, "", func(): set_main(not main_is_follower))
+	ui.main.toggle_mode = true
 	_corner(layer, top_left, Control.PRESET_TOP_LEFT)
 
 	# bottom centre: transport
