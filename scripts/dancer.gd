@@ -49,6 +49,7 @@ func _ready() -> void:
 		var sx := -1.0 if side == "L" else 1.0
 		var col := COL_L if side == "L" else COL_R
 		var sh := _joint(s, "Shoulder" + side, Vector3(0.19 * sx, 0.13, 0))
+		sh.set_meta("rest", sh.position)
 		_sphere(sh, 0.05, Vector3.ZERO, COL_BODY)
 		var ua := _joint(sh, "UpperArm" + side, Vector3.ZERO)
 		_capsule(ua, UPPER_ARM, 0.04, COL_BODY)
@@ -89,7 +90,8 @@ func _ready() -> void:
 ## Pose the dancer. `feet` maps "L"/"R" to dancer-frame Vector3(x, lift, z) of the sole,
 ## `pitch` maps side to foot pitch, `c` is the dancer-frame pelvis position (x, _, z),
 ## `dip` lowers the pelvis from `height`. `style` (all optional): hip `yaw` in radians
-## (+ = right hip forward), `arm_forward`/`arm_out` upper-arm angles, `elbow` bend.
+## (+ = right hip forward), `arm_forward`/`arm_out` upper-arm angles, `elbow` bend,
+## `lead` world offset of the shoulders (preparing a change).
 func apply(feet: Dictionary, pitch: Dictionary, c: Vector3, height: float, dip: float, style := {}) -> void:
 	var yaw: float = style.get("yaw", 0.0)
 	pelvis.rotation.y = yaw
@@ -97,6 +99,8 @@ func apply(feet: Dictionary, pitch: Dictionary, c: Vector3, height: float, dip: 
 		spine[i].rotation.y = -yaw * SPINE_UNTWIST[i]
 	for side in ["L", "R"]:
 		var sx := -1.0 if side == "L" else 1.0
+		var sh: Node3D = arms[side].upper.get_parent() # shoulders give with a lead (world offset)
+		sh.position = sh.get_meta("rest") + global_basis.inverse() * style.get("lead", Vector3.ZERO)
 		arms[side].upper.rotation = Vector3(style.get("arm_forward", 0.0), 0, style.get("arm_out", 0.12) * sx)
 		arms[side].fore.rotation = Vector3(style.get("elbow", 0.35), style.get("forearm_in", 0.0) * sx, 0)
 	var y := height - dip

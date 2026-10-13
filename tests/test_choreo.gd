@@ -86,21 +86,38 @@ func _initialize() -> void:
 					fails += 1
 					printerr("FAIL %s beat %d: %s tap not on the toe" % [who, i, side])
 
-	# held hands meet on the hold point at every beat (Flat: always held)
+	# held hands meet on the hold point at every beat (Flat: always held), and through the
+	# count-8 preparation window with the real pull toward each possible next basic
+	var checks := [] # [T, pull, next basic or ""]
 	for i in beats:
-		var lp: Dictionary = at.call(float(i))
-		var fp: Dictionary = at.call(float(i), true)
-		lead.apply(lp.feet, lp.pitch, lp.pelvis, ch.p.pelvis_height, lp.dip)
-		fol.apply(fp.feet, fp.pitch, fp.pelvis, ch.p.pelvis_height, fp.dip)
+		checks.append([float(i), Vector3.ZERO, ""])
+	for block in seq.size():
+		for name in ch.basics:
+			var away: Vector3 = -ch.first_step(name)
+			for k in 30:
+				var t := 6.5 + 1.5 * k / 30.0
+				var prep := smoothstep(6.5, 7.0, t) * (1.0 - smoothstep(7.6, 8.0, t)) # as main.gd
+				checks.append([block * 8 + t, Vector3(away.x, 0, -away.z) * ch.p.prep_reach * prep, name])
+	for c in checks:
+		var lp: Dictionary = at.call(c[0])
+		var fp: Dictionary = at.call(c[0], true)
+		if c[2] != "": # the dancers step into the basic being prepared
+			var k := int(c[0] / 8)
+			var pr: String = seq[(k + seq.size() - 1) % seq.size()]
+			lp = ch.sample(fmod(c[0], 8.0), pr, seq[k], c[2])
+			fp = ch.sample(fmod(c[0], 8.0), pr, seq[k], c[2], true)
+		var pull: Vector3 = c[1]
+		lead.apply(lp.feet, lp.pitch, lp.pelvis, ch.p.pelvis_height, lp.dip, {"lead": pull * ch.p.prep_shoulder})
+		fol.apply(fp.feet, fp.pitch, fp.pelvis, ch.p.pelvis_height, fp.dip, {"lead": pull * ch.p.prep_shoulder})
 		for side in ["L", "R"]:
 			var other := "R" if side == "L" else "L"
-			var target: Vector3 = lead.hold_point(lead.arms[side].upper.global_position, fol.arms[other].upper.global_position, ch.p.hold_drop)
+			var target: Vector3 = lead.hold_point(lead.arms[side].upper.global_position, fol.arms[other].upper.global_position, ch.p.hold_drop) + pull
 			lead.hold(side, target, 1.0)
 			fol.hold(other, target, 1.0)
 			for pair in [[lead, side], [fol, other]]:
 				var hand: Vector3 = pair[0].arms[pair[1]].fore.global_transform * Vector3(0, -lead.FOREARM, 0)
 				if hand.distance_to(target) > 0.01:
 					fails += 1
-					printerr("FAIL beat %d: hand %s misses the hold by %.3f" % [i, pair[1], hand.distance_to(target)])
+					printerr("FAIL T=%.2f: hand %s misses the hold by %.3f" % [c[0], pair[1], hand.distance_to(target)])
 	print("Choreo test (%d beats, leader + follower): %s" % [beats, "PASS" if fails == 0 else "%d FAILS" % fails])
 	quit(fails)

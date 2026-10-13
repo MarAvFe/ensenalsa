@@ -12,6 +12,8 @@
     "break_distance": 0.25,
     "partner_distance": 0.7,
     "hold_drop": 0.38,
+    "prep_reach": 0.07,
+    "prep_shoulder": 0.4,
     "pelvis_dip": 0.03,
     "weight_phase": 0.4,
     "release_phase": 0.45,

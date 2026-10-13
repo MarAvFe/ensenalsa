@@ -7,7 +7,7 @@ const Dancer := preload("res://scripts/dancer.gd")
 const GOLD := Color(1.0, 0.8, 0.2)
 const SIDE_COL := {"L": Color(0.25, 0.45, 0.95), "R": Color(0.95, 0.3, 0.25)}
 const FOOT_FWD := 0.07 # footprint centre sits this far ahead of the ankle
-const CAM_NAMES := ["Behind", "Front", "Feet (from head)", "Feet (side)", "Behind 30°", "Front 30°"]
+const CAM_NAMES := ["Behind", "Front", "Feet (from head)", "Feet (side)", "Behind 30°", "Front 30°", "Behind 45°", "Front 45°"]
 
 @onready var dancer := $Dancer
 
@@ -56,10 +56,12 @@ func _ready() -> void:
 	add_child(pov)
 	pov.add_child(rig)
 	# [eye, look-at] per entry in CAM_NAMES. Dancer stands at the origin facing -Z, right = +X.
-	var r30 := Basis(Vector3.UP, deg_to_rad(30)) # orbit 30° toward the dancer's right
+	var r30 := Basis(Vector3.UP, deg_to_rad(30)) # orbit toward the dancer's right
+	var r45 := Basis(Vector3.UP, deg_to_rad(45))
 	for v in [[Vector3(0, 1.5, 2.3), Vector3(0, 0.55, -0.1)], [Vector3(0, 1.5, -2.4), Vector3(0, 0.6, 0)],
 			[Vector3(0, 1.78, 0.32), Vector3(0, 0, -0.18)], [Vector3(2.6, 0.45, -0.05), Vector3(0, 0.12, -0.05)],
-			[r30 * Vector3(0, 1.5, 2.3), Vector3(0, 0.55, 0)], [r30.inverse() * Vector3(0, 1.5, -2.4), Vector3(0, 0.6, 0)]]:
+			[r30 * Vector3(0, 1.5, 2.3), Vector3(0, 0.55, 0)], [r30.inverse() * Vector3(0, 1.5, -2.4), Vector3(0, 0.6, 0)],
+			[r45 * Vector3(0, 1.5, 2.3), Vector3(0, 0.55, 0)], [r45.inverse() * Vector3(0, 1.5, -2.4), Vector3(0, 0.6, 0)]]:
 		var cam := Camera3D.new()
 		cam.near = 0.03
 		if cams.size() == 2:
@@ -128,17 +130,22 @@ func _process(dt: float) -> void:
 		tick.play()
 	for k in look:
 		look[k] = lerpf(look[k], ch.styles[style][k], 1.0 - exp(-dt * 6.0))
-	look.yaw = look.hip_twist * pose.twist
-	dancer.apply(pose.feet, pose.pitch, pose.pelvis, ch.p.pelvis_height, pose.dip, look)
+	# count 8 with a different basic queued: the leader prepares the change. His hands glow and
+	# his arms (shoulder, elbow, wrist) draw away from the next basic's first step, leading her.
+	var prep := 0.0
+	if queued != cur_basic:
+		prep = smoothstep(6.5, 7.0, t) * (1.0 - smoothstep(7.6, 8.0, t))
+	dancer.set_halo(prep * (0.8 + 0.2 * sin(TAU * 2.0 * t)))
+	var away := -ch.first_step(queued) # dancer frame
+	var lead: Vector3 = dancer.global_basis * Vector3(away.x, 0, -away.z) * prep * ch.p.prep_reach
+	var lead_style := look.duplicate()
+	lead_style.yaw = look.hip_twist * pose.twist
+	lead_style.lead = lead * ch.p.prep_shoulder
+	dancer.apply(pose.feet, pose.pitch, pose.pelvis, ch.p.pelvis_height, pose.dip, lead_style)
 	var ease := 1.0 - exp(-dt * 4.0)
 	var centre: float = -ch.p.partner_distance / 2.0 if follower.visible else 0.0
 	rig.position.z = lerpf(rig.position.z, centre, ease)
 	pov.transform = pov.transform.interpolate_with(main_dancer().transform, ease)
-	# count 8 with a different basic queued: the leader's hands glow to prepare the change
-	var prep := 0.0
-	if queued != cur_basic:
-		prep = smoothstep(6.5, 7.0, t) * (1.0 - smoothstep(7.6, 8.0, t)) * (0.8 + 0.2 * sin(TAU * 2.0 * t))
-	dancer.set_halo(prep)
 	var main_pose := pose
 	if follower.visible:
 		var m := ch.sample(t, prev_basic, cur_basic, queued, true)
@@ -146,11 +153,12 @@ func _process(dt: float) -> void:
 			main_pose = m
 		var look_f := look.duplicate()
 		look_f.yaw = look.hip_twist * m.twist
+		look_f.lead = lead * ch.p.prep_shoulder # she is led: her shoulders give the same way
 		follower.apply(m.feet, m.pitch, m.pelvis, ch.p.pelvis_height, m.dip, look_f)
 		for side in ["L", "R"]: # leader's hand `side` holds the follower's opposite hand
 			var other := "R" if side == "L" else "L"
 			var at: Vector3 = Dancer.hold_point(dancer.arms[side].upper.global_position,
-				follower.arms[other].upper.global_position, ch.p.hold_drop)
+				follower.arms[other].upper.global_position, ch.p.hold_drop) + lead
 			var h: float = 1.0 - look.release_hands * pose.free[side]
 			dancer.hold(side, at, h)
 			follower.hold(other, at, h)
@@ -322,7 +330,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		KEY_SPACE: toggle_play()
 		KEY_RIGHT: step_beat(1)
 		KEY_LEFT: step_beat(-1)
-		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6: set_camera(e.keycode - KEY_1)
+		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8: set_camera(e.keycode - KEY_1)
 		KEY_M: ui.music.button_pressed = not music_on
 		KEY_F: ui.follower.button_pressed = not follower.visible
 		KEY_P: set_main(not main_is_follower)

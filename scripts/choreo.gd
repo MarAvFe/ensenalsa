@@ -59,6 +59,16 @@ static func _follow(st: Dictionary, mode: String) -> Dictionary:
 	return f # `free` stays keyed by the leader's hand of each held pair
 
 
+## Direction (dancer frame, unit, y = 0) of the leader's first weighted step in `basic`.
+func first_step(basic: String) -> Vector3:
+	var st: Dictionary = basics[basic][0]
+	var side: String = st.weight
+	var home := _v(p["home_" + side], 0.0)
+	var d: Vector3 = st.feet[side] - home
+	d.y = 0.0
+	return d.normalized()
+
+
 ## Dancer-frame foot position (x, lift, z).
 func _v(xz: Array, y: float) -> Vector3:
 	return Vector3(xz[0], y, xz[1])
