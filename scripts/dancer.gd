@@ -4,6 +4,8 @@ extends Node3D
 const THIGH := 0.44
 const SHIN := 0.44
 const ANKLE_H := 0.08 # ankle joint height above the sole
+const FOOT_TOE := 0.20 # toe tip, ahead of the ankle
+const FOOT_HEEL := 0.06 # heel, behind the ankle
 const HIP_X := 0.10
 const HIP_DROP := 0.05 # hip joints sit this far below the pelvis origin
 const PELVIS_H := 0.93
@@ -50,7 +52,7 @@ func _ready() -> void:
 		var knee := _joint(hip, "Shin" + side, Vector3(0, -THIGH, 0))
 		_capsule(knee, SHIN, 0.05, col)
 		var ankle := _joint(knee, "Foot" + side, Vector3(0, -SHIN, 0))
-		_box(ankle, Vector3(0.10, 0.06, 0.26), Vector3(0, -ANKLE_H + 0.03, -0.07), col)
+		_box(ankle, Vector3(0.10, 0.06, FOOT_TOE + FOOT_HEEL), Vector3(0, -ANKLE_H + 0.03, (FOOT_HEEL - FOOT_TOE) / 2.0), col)
 		legs[side] = {"hip": hip, "knee": knee, "ankle": ankle}
 	for m in pelvis.get_node("Spine1").find_children("*", "MeshInstance3D", true, false) \
 			+ pelvis.find_children("*", "MeshInstance3D", false, false):
@@ -72,7 +74,7 @@ func apply(feet: Dictionary, pitch: Dictionary, c: Vector3, height: float, dip: 
 	for side in ["L", "R"]:
 		var sx := -1.0 if side == "L" else 1.0
 		arms[side].upper.rotation = Vector3(style.get("arm_forward", 0.0), 0, style.get("arm_out", 0.12) * sx)
-		arms[side].fore.rotation.x = style.get("elbow", 0.35)
+		arms[side].fore.rotation = Vector3(style.get("elbow", 0.35), style.get("forearm_in", 0.0) * sx, 0)
 	var y := height - dip
 	for side in ["L", "R"]: # wide stance: sink the pelvis just enough that both legs keep a slight bend
 		var f: Vector3 = feet[side]
@@ -80,11 +82,18 @@ func apply(feet: Dictionary, pitch: Dictionary, c: Vector3, height: float, dip: 
 		var hip := Vector2(c.x + hx * cos(yaw), c.z + hx * sin(yaw))
 		var flat := hip.distance_to(Vector2(f.x, f.z))
 		var reach := (THIGH + SHIN) * 0.97
-		y = minf(y, ANKLE_H + f.y + HIP_DROP + sqrt(maxf(reach * reach - flat * flat, 0.0)))
+		y = minf(y, _ankle_h(pitch.get(side, 0.0)) + f.y + HIP_DROP + sqrt(maxf(reach * reach - flat * flat, 0.0)))
 	pelvis.position = Vector3(c.x, y, -c.z)
 	for side in ["L", "R"]:
 		var f: Vector3 = feet[side]
-		solve_leg(side, global_transform * Vector3(f.x, ANKLE_H + f.y, -f.z), pitch.get(side, 0.0))
+		var ph: float = pitch.get(side, 0.0)
+		solve_leg(side, global_transform * Vector3(f.x, _ankle_h(ph) + f.y, -f.z), ph)
+
+
+## Ankle height that puts the lowest point of a foot pitched by `ph` on the sole height
+## (toe-down: the toe tip touches, as in a tap).
+static func _ankle_h(ph: float) -> float:
+	return ANKLE_H * cos(ph) + maxf(-FOOT_TOE * sin(ph), FOOT_HEEL * sin(ph))
 
 
 ## Two-bone IK: place the ankle of `side` at world `target`, knee bending forward.

@@ -24,6 +24,7 @@ func _init(path: String) -> void:
 	for basic_name in data.basics:
 		var counts: Array = data.basics[basic_name]
 		var feet := {"L": _v(p.home_L, 0.0), "R": _v(p.home_R, 0.0)} # every basic starts and ends at home
+		var pitch := {"L": 0.0, "R": 0.0} # a tapped foot rests on its toe tip until it moves again
 		var states: Array[Dictionary] = []
 		# every basic is a full 8-count, so switching between basics only happens on count 1
 		assert(counts.map(func(c): return int(c.count)) == [1, 2, 3, 4, 5, 6, 7, 8], basic_name + " must have counts 1-8")
@@ -34,8 +35,9 @@ func _init(path: String) -> void:
 				actions[side] = a
 				if a != "hold":
 					feet[side] = _v(c[side].target, p.lift if a == "lift" else 0.0)
+					pitch[side] = -p.tap_pitch if a == "tap" else 0.0
 			states.append({"count": int(c.count), "basic": basic_name, "weight": c.weight,
-				"action": actions, "feet": feet.duplicate()})
+				"action": actions, "feet": feet.duplicate(), "pitch": pitch.duplicate()})
 		basics[basic_name] = states
 
 
@@ -50,7 +52,8 @@ static func _other(side: String) -> String:
 
 ## Ordered segments for the move from state a to state b: ["w", side] shifts weight, ["m", side] moves a foot.
 func segments(a: Dictionary, b: Dictionary) -> Array:
-	var movers := SIDES.filter(func(s): return not a.feet[s].is_equal_approx(b.feet[s]) or b.action[s] == "tap")
+	var movers := SIDES.filter(func(s): return not a.feet[s].is_equal_approx(b.feet[s]) \
+		or not is_equal_approx(a.pitch[s], b.pitch[s]) or b.action[s] == "tap")
 	var w0: String = a.weight
 	var w1: String = b.weight
 	var segs := []
@@ -94,7 +97,7 @@ func sample(t: float, prev: String, cur: String, next: String) -> Dictionary:
 	var z: Dictionary = basics[prev][7] if i == 0 else basics[cur][i - 1]
 	var a: Dictionary = basics[cur][i]
 	var b: Dictionary = basics[next][0] if i == 7 else basics[cur][i + 1]
-	var out := {"feet": a.feet.duplicate(), "pitch": {"L": 0.0, "R": 0.0},
+	var out := {"feet": a.feet.duplicate(), "pitch": a.pitch.duplicate(),
 		"w_r": 1.0 if a.weight == "R" else 0.0, "dip": 0.0, "state": a}
 
 	_play_all(z, a, b, s, out)
@@ -126,6 +129,7 @@ func _play_all(z: Dictionary, a: Dictionary, b: Dictionary, s: float, out: Dicti
 		t0 = p.release_phase
 		for g in rel:
 			out.feet[g[1]] = z.feet[g[1]] # not released yet at the beat
+			out.pitch[g[1]] = z.pitch[g[1]]
 		_play(rel, z, a, s, 0.0, t0, out)
 
 	var pre: Array = _split(segments(a, b))[0]
@@ -163,6 +167,5 @@ func _play(segs: Array, a: Dictionary, b: Dictionary, s: float, from: float, to:
 				var moved := Vector2(f0.x, f0.z).distance_to(Vector2(f1.x, f1.z)) > 0.001
 				var arc: float = p.tap_height if tap else (p.step_arc if moved else 0.0)
 				out.feet[side] = f0.lerp(f1, e) + Vector3(0, arc * bump, 0)
-				if tap:
-					out.pitch[side] = -p.tap_pitch * bump
+				out.pitch[side] = lerpf(a.pitch[side], b.pitch[side], e)
 		start += dur

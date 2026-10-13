@@ -3,7 +3,7 @@ extends SceneTree
 ## Checks over a sequence covering every basic-to-basic switch: the weight-bearing foot never slides, every IK target
 ## is reachable (no knee pop), nothing jumps between samples (no teleporting), and timing is
 ## square: every weight change happens inside the last `weight_phase` of its beat, landing on it.
-## Reach and square shoulders are checked in every style (hip twist moves the hips).
+## Reach and square shoulders are checked in every style (hip twist moves the hips); taps land on the toe tip.
 
 func _initialize() -> void:
 	var ch = load("res://scripts/choreo.gd").new("res://data/routine.json")
@@ -56,6 +56,22 @@ func _initialize() -> void:
 		var want := 1.0 if st.weight == "R" else 0.0
 		var before: float = at.call(i - ch.p.weight_phase - 0.01).w_r
 		var changes: bool = st.weight != at.call(i - 1.0).state.weight
+		for side in ["L", "R"]:
+			if st.action[side] != "tap":
+				continue
+			# the tap lands on the toe tip, heel up: on the beat, or when it is a release
+			# (the foot only just gave up its weight) at the end of the release window
+			var on_toe := false
+			for when in [float(i), i + ch.p.release_phase]:
+				var pose: Dictionary = at.call(when)
+				d.apply(pose.feet, pose.pitch, pose.pelvis, ch.p.pelvis_height, pose.dip)
+				var foot: Node3D = d.legs[side].ankle
+				var toe: float = (foot.global_transform * Vector3(0, -d.ANKLE_H, -d.FOOT_TOE)).y
+				var heel: float = (foot.global_transform * Vector3(0, -d.ANKLE_H, d.FOOT_HEEL)).y
+				on_toe = on_toe or (absf(toe) < 0.003 and heel > 0.05)
+			if not on_toe:
+				fails += 1
+				printerr("FAIL beat %d: %s tap not on the toe" % [i, side])
 		if absf(now - want) > 1e-4 or (changes and absf(before - now) < 0.99):
 			fails += 1
 			printerr("FAIL beat %d: weight not landing on the beat (before=%.2f now=%.2f)" % [i, before, now])
