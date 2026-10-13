@@ -14,6 +14,10 @@ const SPINE_UNTWIST := [0.4, 0.35, 0.25] # share of the hip twist each spine joi
 const COL_BODY := Color(0.75, 0.72, 0.68)
 const COL_L := Color(0.25, 0.45, 0.95)
 const COL_R := Color(0.95, 0.3, 0.25)
+const UPPER_ARM := 0.30
+const FOREARM := 0.27
+
+@export var head_color := Color(0.55, 0.3, 0.8) # leader purple; the follower sets orange
 
 var pelvis: Node3D
 var legs := {} # "L"/"R" -> {hip, knee, ankle}
@@ -33,7 +37,7 @@ func _ready() -> void:
 	var neck := _joint(s, "Neck", Vector3(0, 0.15, 0))
 	_capsule(neck, 0.10, 0.04, COL_BODY, true)
 	var head := _joint(neck, "Head", Vector3(0, 0.10, 0))
-	_sphere(head, 0.11, Vector3(0, 0.10, 0), COL_BODY)
+	_sphere(head, 0.11, Vector3(0, 0.10, 0), head_color)
 	_box(head, Vector3(0.04, 0.03, 0.05), Vector3(0, 0.1, -0.11), COL_BODY) # nose shows facing
 
 	for side in ["L", "R"]:
@@ -42,9 +46,9 @@ func _ready() -> void:
 		var sh := _joint(s, "Shoulder" + side, Vector3(0.19 * sx, 0.13, 0))
 		_sphere(sh, 0.05, Vector3.ZERO, COL_BODY)
 		var ua := _joint(sh, "UpperArm" + side, Vector3.ZERO)
-		_capsule(ua, 0.30, 0.04, COL_BODY)
-		var fa := _joint(ua, "Forearm" + side, Vector3(0, -0.30, 0))
-		_capsule(fa, 0.27, 0.035, COL_BODY)
+		_capsule(ua, UPPER_ARM, 0.04, COL_BODY)
+		var fa := _joint(ua, "Forearm" + side, Vector3(0, -UPPER_ARM, 0))
+		_capsule(fa, FOREARM, 0.035, COL_BODY)
 		arms[side] = {"upper": ua, "fore": fa}
 
 		var hip := _joint(pelvis, "Thigh" + side, Vector3(HIP_X * sx, -HIP_DROP, 0))
@@ -94,6 +98,38 @@ func apply(feet: Dictionary, pitch: Dictionary, c: Vector3, height: float, dip: 
 ## (toe-down: the toe tip touches, as in a tap).
 static func _ankle_h(ph: float) -> float:
 	return ANKLE_H * cos(ph) + maxf(-FOOT_TOE * sin(ph), FOOT_HEEL * sin(ph))
+
+
+## Blend arm `side` from its style pose (set by apply) toward holding a hand at world `target`.
+## `h` = 0 leaves the style pose, 1 = hand exactly on the target. Elbows hang down, out and back.
+func hold(side: String, target: Vector3, h: float) -> void:
+	if h <= 0.001:
+		return
+	var arm: Dictionary = arms[side]
+	var sh: Vector3 = arm.upper.global_position
+	var to := target - sh
+	var d := clampf(to.length(), 0.01, UPPER_ARM + FOREARM - 0.001)
+	var dir := to.normalized()
+	var sx := -1.0 if side == "L" else 1.0
+	var pole_hint := global_basis * Vector3(0.5 * sx, -1.0, 0.3).normalized()
+	var pole := (pole_hint - dir * pole_hint.dot(dir)).normalized()
+	var a := (UPPER_ARM * UPPER_ARM - FOREARM * FOREARM + d * d) / (2.0 * d)
+	var elbow := sh + dir * a + pole * sqrt(maxf(UPPER_ARM * UPPER_ARM - a * a, 0.0))
+	var fk_fore: Basis = arm.fore.global_basis
+	arm.upper.global_basis = arm.upper.global_basis.slerp(_safe_basis(sh, elbow), h)
+	arm.fore.global_basis = fk_fore.slerp(_safe_basis(elbow, sh + dir * d), h)
+
+
+## Midpoint between two partners' shoulders, `drop` lower: where a held pair of hands meets.
+static func hold_point(shoulder_a: Vector3, shoulder_b: Vector3, drop: float) -> Vector3:
+	return (shoulder_a + shoulder_b) / 2.0 + Vector3.DOWN * drop
+
+
+## Bone basis from->to; the roll reference avoids being parallel to the bone (capsules don't show roll).
+func _safe_basis(from: Vector3, to: Vector3) -> Basis:
+	var fwd := global_basis * Vector3.FORWARD
+	var dir := (to - from).normalized()
+	return _bone_basis(from, to, fwd if absf(dir.dot(fwd)) < 0.9 else Vector3.UP)
 
 
 ## Two-bone IK: place the ankle of `side` at world `target`, knee bending forward.

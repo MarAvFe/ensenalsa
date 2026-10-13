@@ -3,6 +3,7 @@ extends Node3D
 ## footprints, beat counter, weight marker, cameras, music.
 
 const Choreo := preload("res://scripts/choreo.gd")
+const Dancer := preload("res://scripts/dancer.gd")
 const GOLD := Color(1.0, 0.8, 0.2)
 const SIDE_COL := {"L": Color(0.25, 0.45, 0.95), "R": Color(0.95, 0.3, 0.25)}
 const FOOT_FWD := 0.07 # footprint centre sits this far ahead of the ankle
@@ -31,6 +32,7 @@ var music_on := true
 var floor_numbers := false # count labels on the footprints
 var style: String # target style; `look` eases toward it so switching never snaps
 var look := {}
+var follower: Node3D
 var stretch := AudioEffectPitchShift.new()
 var next_seek_ms := 0
 var tick := AudioStreamPlayer.new() # counts are clicked when the music is off
@@ -76,6 +78,12 @@ func _ready() -> void:
 	add_child(music)
 	add_child(tick)
 	AudioServer.add_bus_effect(0, stretch)
+	follower = Dancer.new()
+	follower.name = "Follower"
+	follower.head_color = Color(1.0, 0.55, 0.1)
+	follower.position = Vector3(0, 0, -ch.p.partner_distance) # in front of the leader, facing him
+	follower.rotation.y = PI
+	add_child(follower)
 	weight_disc = _flat(CylinderMesh.new(), GOLD, 0.8)
 	weight_disc.mesh.top_radius = 0.13
 	weight_disc.mesh.bottom_radius = 0.13
@@ -114,6 +122,16 @@ func _process(dt: float) -> void:
 		look[k] = lerpf(look[k], ch.styles[style][k], 1.0 - exp(-dt * 6.0))
 	look.yaw = look.hip_twist * pose.twist
 	dancer.apply(pose.feet, pose.pitch, pose.pelvis, ch.p.pelvis_height, pose.dip, look)
+	if follower.visible:
+		var m := Choreo.mirror(pose)
+		follower.apply(m.feet, m.pitch, m.pelvis, ch.p.pelvis_height, m.dip, look)
+		for side in ["L", "R"]: # leader's hand `side` holds the follower's opposite hand
+			var other := "R" if side == "L" else "L"
+			var at: Vector3 = Dancer.hold_point(dancer.arms[side].upper.global_position,
+				follower.arms[other].upper.global_position, ch.p.hold_drop)
+			var h: float = 1.0 - look.release_hands * pose.free[side]
+			dancer.hold(side, at, h)
+			follower.hold(other, at, h)
 	ui.play.text = "Pause" if playing else "Play"
 	_update_markers(pose, t)
 	_sync_music()
@@ -270,6 +288,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		KEY_LEFT: step_beat(-1)
 		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6: set_camera(e.keycode - KEY_1)
 		KEY_M: ui.music.button_pressed = not music_on
+		KEY_F: ui.follower.button_pressed = not follower.visible
 
 
 func _build_ui() -> void:
@@ -334,6 +353,7 @@ func _build_ui() -> void:
 	var loop := _check(opts, "Loop", looping, func(on): looping = on)
 	loop.tooltip_text = "Off: stop on count 8"
 	ui.music = _check(opts, "Music  (M)", music_on, func(on): music_on = on)
+	ui.follower = _check(opts, "Follower  (F)", true, func(on): follower.visible = on)
 	_check(opts, "Floor numbers", floor_numbers, func(on):
 		floor_numbers = on
 		for pr in prints.values():

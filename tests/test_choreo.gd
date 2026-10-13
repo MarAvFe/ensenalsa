@@ -3,12 +3,16 @@ extends SceneTree
 ## Checks over a sequence covering every basic-to-basic switch: the weight-bearing foot never slides, every IK target
 ## is reachable (no knee pop), nothing jumps between samples (no teleporting), and timing is
 ## square: every weight change happens inside the last `weight_phase` of its beat, landing on it.
-## Reach and square shoulders are checked in every style (hip twist moves the hips); taps land on the toe tip.
+## Reach and square shoulders are checked in every style (hip twist moves the hips); taps land on the toe tip; held hands meet.
 
 func _initialize() -> void:
 	var ch = load("res://scripts/choreo.gd").new("res://data/routine.json")
 	var d: Node3D = load("res://scripts/dancer.gd").new()
 	root.add_child(d)
+	var fol: Node3D = load("res://scripts/dancer.gd").new() # follower, placed as in main.gd
+	fol.position = Vector3(0, 0, -ch.p.partner_distance)
+	fol.rotation.y = PI
+	root.add_child(fol)
 	await process_frame
 	var D := "diagonal_basic"
 	var I := "inline_basic"
@@ -56,6 +60,20 @@ func _initialize() -> void:
 		var want := 1.0 if st.weight == "R" else 0.0
 		var before: float = at.call(i - ch.p.weight_phase - 0.01).w_r
 		var changes: bool = st.weight != at.call(i - 1.0).state.weight
+		var hp: Dictionary = at.call(float(i)) # held hands meet on the hold point (Flat: always held)
+		var mp: Dictionary = ch.mirror(hp)
+		d.apply(hp.feet, hp.pitch, hp.pelvis, ch.p.pelvis_height, hp.dip)
+		fol.apply(mp.feet, mp.pitch, mp.pelvis, ch.p.pelvis_height, mp.dip)
+		for side in ["L", "R"]:
+			var other := "R" if side == "L" else "L"
+			var target: Vector3 = d.hold_point(d.arms[side].upper.global_position, fol.arms[other].upper.global_position, ch.p.hold_drop)
+			d.hold(side, target, 1.0)
+			fol.hold(other, target, 1.0)
+			for who in [[d, side], [fol, other]]:
+				var hand: Vector3 = who[0].arms[who[1]].fore.global_transform * Vector3(0, -d.FOREARM, 0)
+				if hand.distance_to(target) > 0.01:
+					fails += 1
+					printerr("FAIL beat %d: hand %s misses the hold by %.3f" % [i, who[1], hand.distance_to(target)])
 		for side in ["L", "R"]:
 			if st.action[side] != "tap":
 				continue

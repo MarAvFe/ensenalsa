@@ -10,6 +10,8 @@
     "pelvis_over_foot": 0.85,
     "break_follow": 0.2,
     "break_distance": 0.25,
+    "partner_distance": 0.7,
+    "hold_drop": 0.38,
     "pelvis_dip": 0.03,
     "weight_phase": 0.4,
     "release_phase": 0.45,
@@ -22,40 +24,40 @@
   "start_basic": "diagonal_basic",
   "start_style": "flat",
   "styles": {
-    "flat":    {"label": "Flat",    "hip_twist": 0.0, "arm_forward": 0.0,  "arm_out": 0.12, "elbow": 0.35, "forearm_in": 0.0},
-    "natural": {"label": "Natural", "hip_twist": 1.6, "arm_forward": 0.25, "arm_out": 0.15, "elbow": 2.25, "forearm_in": 0.7}
+    "flat":    {"label": "Flat",    "release_hands": 0.0, "hip_twist": 0.0, "arm_forward": 0.0,  "arm_out": 0.12, "elbow": 0.35, "forearm_in": 0.0},
+    "natural": {"label": "Natural", "release_hands": 1.0, "hip_twist": 1.6, "arm_forward": 0.25, "arm_out": 0.15, "elbow": 2.25, "forearm_in": 0.7}
   },
   "labels": {"diagonal_basic": "Diagonal", "inline_basic": "Front-back", "side_basic": "Sides"},
   "basics": {
     "diagonal_basic": [
-      {"count": 1, "weight": "L", "L": {"target": [0.10, -0.30], "action": "step"}, "R": {"target": [0.18, 0], "action": "lift"}},
+      {"count": 1, "weight": "L", "L": {"target": [0.10, -0.30], "action": "step"}, "R": {"target": [0.18, 0], "action": "lift"}, "free_hands": ["L"]},
       {"count": 2, "weight": "R", "L": {"target": [-0.18, 0], "action": "place"}, "R": {"target": [0.18, 0], "action": "step"}},
       {"count": 3, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},  "R": {"target": [0.18, 0], "action": "lift"}},
       {"count": 4, "weight": "L", "L": {"target": [-0.18, 0], "action": "hold"},  "R": {"target": [0.18, 0], "action": "tap"}},
-      {"count": 5, "weight": "R", "L": {"target": [-0.18, 0], "action": "lift"},  "R": {"target": [-0.10, -0.30], "action": "step"}},
+      {"count": 5, "weight": "R", "L": {"target": [-0.18, 0], "action": "lift"},  "R": {"target": [-0.10, -0.30], "action": "step"}, "free_hands": ["R"]},
       {"count": 6, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},  "R": {"target": [0.18, 0], "action": "place"}},
       {"count": 7, "weight": "R", "L": {"target": [-0.18, 0], "action": "lift"},  "R": {"target": [0.18, 0], "action": "step"}},
       {"count": 8, "weight": "R", "L": {"target": [-0.18, 0], "action": "tap"},   "R": {"target": [0.18, 0], "action": "hold"}}
     ],
     "inline_basic": [
-      {"count": 1, "weight": "L", "L": {"target": [-0.18, 0.30], "action": "step"},  "R": {"target": [0.18, 0], "action": "tap"}},
-      {"count": 2, "weight": "R", "L": {"target": [-0.18, 0], "action": "place"},    "R": {"target": [0.18, 0], "action": "step"}},
-      {"count": 3, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},     "R": {"target": [0.18, 0], "action": "lift"}},
-      {"count": 4, "weight": "L", "L": {"target": [-0.18, 0], "action": "hold"},     "R": {"target": [0.18, 0], "action": "tap"}},
-      {"count": 5, "weight": "R", "L": {"target": [-0.18, 0], "action": "tap"},      "R": {"target": [0.18, -0.30], "action": "step"}},
-      {"count": 6, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},     "R": {"target": [0.18, 0], "action": "place"}},
-      {"count": 7, "weight": "R", "L": {"target": [-0.18, 0], "action": "lift"},     "R": {"target": [0.18, 0], "action": "step"}},
-      {"count": 8, "weight": "R", "L": {"target": [-0.18, 0], "action": "tap"},      "R": {"target": [0.18, 0], "action": "hold"}}
+      {"count": 1, "weight": "L", "L": {"target": [-0.18, 0.30], "action": "step"},  "R": {"target": [0.18, 0], "action": "tap"}, "free_hands": ["L"]},
+      {"count": 2, "weight": "R", "L": {"target": [-0.18, 0], "action": "place"},    "R": {"target": [0.18, 0], "action": "step"}, "free_hands": ["L"]},
+      {"count": 3, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},     "R": {"target": [0.18, 0], "action": "lift"}, "free_hands": ["L"]},
+      {"count": 4, "weight": "L", "L": {"target": [-0.18, 0], "action": "hold"},     "R": {"target": [0.18, 0], "action": "tap"}, "free_hands": ["L"]},
+      {"count": 5, "weight": "R", "L": {"target": [-0.18, 0], "action": "tap"},      "R": {"target": [0.18, -0.30], "action": "step"}, "free_hands": ["L"]},
+      {"count": 6, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},     "R": {"target": [0.18, 0], "action": "place"}, "free_hands": ["L"]},
+      {"count": 7, "weight": "R", "L": {"target": [-0.18, 0], "action": "lift"},     "R": {"target": [0.18, 0], "action": "step"}, "free_hands": ["L"]},
+      {"count": 8, "weight": "R", "L": {"target": [-0.18, 0], "action": "tap"},      "R": {"target": [0.18, 0], "action": "hold"}, "free_hands": ["L"]}
     ],
     "side_basic": [
-      {"count": 1, "weight": "L", "L": {"target": [-0.48, 0], "action": "step"},  "R": {"target": [0.18, 0], "action": "tap"}},
-      {"count": 2, "weight": "R", "L": {"target": [-0.18, 0], "action": "place"},    "R": {"target": [0.18, 0], "action": "step"}},
-      {"count": 3, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},     "R": {"target": [0.18, 0], "action": "lift"}},
-      {"count": 4, "weight": "L", "L": {"target": [-0.18, 0], "action": "hold"},     "R": {"target": [0.18, 0], "action": "tap"}},
-      {"count": 5, "weight": "R", "L": {"target": [-0.18, 0], "action": "tap"},      "R": {"target": [0.48, 0], "action": "step"}},
-      {"count": 6, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},     "R": {"target": [0.18, 0], "action": "place"}},
-      {"count": 7, "weight": "R", "L": {"target": [-0.18, 0], "action": "lift"},     "R": {"target": [0.18, 0], "action": "step"}},
-      {"count": 8, "weight": "R", "L": {"target": [-0.18, 0], "action": "tap"},      "R": {"target": [0.18, 0], "action": "hold"}}
+      {"count": 1, "weight": "L", "L": {"target": [-0.48, 0], "action": "step"},  "R": {"target": [0.18, 0], "action": "tap"}, "free_hands": ["L"]},
+      {"count": 2, "weight": "R", "L": {"target": [-0.18, 0], "action": "place"},    "R": {"target": [0.18, 0], "action": "step"}, "free_hands": ["L"]},
+      {"count": 3, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},     "R": {"target": [0.18, 0], "action": "lift"}, "free_hands": ["L"]},
+      {"count": 4, "weight": "L", "L": {"target": [-0.18, 0], "action": "hold"},     "R": {"target": [0.18, 0], "action": "tap"}, "free_hands": ["L"]},
+      {"count": 5, "weight": "R", "L": {"target": [-0.18, 0], "action": "tap"},      "R": {"target": [0.48, 0], "action": "step"}, "free_hands": ["L"]},
+      {"count": 6, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},     "R": {"target": [0.18, 0], "action": "place"}, "free_hands": ["L"]},
+      {"count": 7, "weight": "R", "L": {"target": [-0.18, 0], "action": "lift"},     "R": {"target": [0.18, 0], "action": "step"}, "free_hands": ["L"]},
+      {"count": 8, "weight": "R", "L": {"target": [-0.18, 0], "action": "tap"},      "R": {"target": [0.18, 0], "action": "hold"}, "free_hands": ["L"]}
     ]
   }
 }

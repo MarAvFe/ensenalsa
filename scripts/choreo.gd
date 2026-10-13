@@ -36,8 +36,10 @@ func _init(path: String) -> void:
 				if a != "hold":
 					feet[side] = _v(c[side].target, p.lift if a == "lift" else 0.0)
 					pitch[side] = -p.tap_pitch if a == "tap" else 0.0
+			var free_hands: Array = c.get("free_hands", []) # leader's hands not holding the follower's
 			states.append({"count": int(c.count), "basic": basic_name, "weight": c.weight,
-				"action": actions, "feet": feet.duplicate(), "pitch": pitch.duplicate()})
+				"action": actions, "feet": feet.duplicate(), "pitch": pitch.duplicate(),
+				"free": {"L": 1.0 if "L" in free_hands else 0.0, "R": 1.0 if "R" in free_hands else 0.0}})
 		basics[basic_name] = states
 
 
@@ -102,9 +104,23 @@ func sample(t: float, prev: String, cur: String, next: String) -> Dictionary:
 
 	_play_all(z, a, b, s, out)
 	out.pelvis = _pelvis(out.feet, out.w_r)
+	var e := smoothstep(0.0, 1.0, s) # hands let go / take hold across the beat, free on the count
+	out.free = {"L": lerpf(a.free.L, b.free.L, e), "R": lerpf(a.free.R, b.free.R, e)}
 	# how far R is ahead of L relative to home (metres); a style's hip_twist turns it into hip yaw
 	out.twist = (out.feet.R.z - p.home_R[1]) - (out.feet.L.z - p.home_L[1])
 	return out
+
+
+## The follower's pose: the leader's mirrored (sides swapped, x and z flipped in her own frame),
+## which in the world is the same movement, so the couple keeps its distance.
+static func mirror(pose: Dictionary) -> Dictionary:
+	var flip := func(v: Vector3) -> Vector3: return Vector3(-v.x, v.y, -v.z)
+	var m := pose.duplicate()
+	m.feet = {"L": flip.call(pose.feet.R), "R": flip.call(pose.feet.L)}
+	m.pitch = {"L": pose.pitch.R, "R": pose.pitch.L}
+	m.w_r = 1.0 - pose.w_r
+	m.pelvis = flip.call(pose.pelvis)
+	return m # twist is unchanged: R-ahead-of-L flips twice
 
 
 ## Pelvis over the weight, measured on the home stance. On a break step (weighted foot away
