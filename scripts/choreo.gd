@@ -15,7 +15,10 @@ func _init(path: String) -> void:
 	p = data.params
 	var feet := {"L": _v(p.home_L, 0.0), "R": _v(p.home_R, 0.0)}
 	for basic_name in data.routine:
-		for c in data.basics[basic_name]:
+		var counts: Array = data.basics[basic_name]
+		# every basic is a full 8-count, so switching between basics only ever happens on count 1
+		assert(counts.map(func(c): return int(c.count)) == [1, 2, 3, 4, 5, 6, 7, 8], basic_name + " must have counts 1-8")
+		for c in counts:
 			var actions := {}
 			for side in SIDES:
 				var a: String = c[side].action

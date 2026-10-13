@@ -89,7 +89,7 @@ func _update_markers(pose: Dictionary) -> void:
 		var col := GOLD if tap else Color(0.85, 0.85, 0.9)
 		lbl.add_theme_color_override("font_color", col if cur else col.darkened(0.55))
 		lbl.add_theme_font_size_override("font_size", 84 if cur else 52)
-	ui.info.text = "%s   •   weight %s" % [st.basic.replace("_", " "), w_side]
+	ui.info.text = "%s  (%d/%d)   •   weight %s" % [st.basic.replace("_", " "), i / 8 + 1, ch.size() / 8, w_side]
 
 
 func _key(side: String, f: Vector3) -> String:
