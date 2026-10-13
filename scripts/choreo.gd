@@ -6,17 +6,22 @@ extends RefCounted
 const SIDES := ["L", "R"]
 
 var p: Dictionary # params from the data file
-var states: Array[Dictionary] = [] # {count, basic, weight, action:{L,R}, feet:{L:Vector3,R:Vector3}}
+var basics := {} # name -> 8 states {count, basic, weight, action:{L,R}, feet:{L:Vector3,R:Vector3}}
+var labels: Dictionary # name -> button label
+var start_basic: String
 
 
 func _init(path: String) -> void:
 	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
 	assert(data != null, "bad routine json: " + path)
 	p = data.params
-	var feet := {"L": _v(p.home_L, 0.0), "R": _v(p.home_R, 0.0)}
-	for basic_name in data.routine:
+	labels = data.labels
+	start_basic = data.start_basic
+	for basic_name in data.basics:
 		var counts: Array = data.basics[basic_name]
-		# every basic is a full 8-count, so switching between basics only ever happens on count 1
+		var feet := {"L": _v(p.home_L, 0.0), "R": _v(p.home_R, 0.0)} # every basic starts and ends at home
+		var states: Array[Dictionary] = []
+		# every basic is a full 8-count, so switching between basics only happens on count 1
 		assert(counts.map(func(c): return int(c.count)) == [1, 2, 3, 4, 5, 6, 7, 8], basic_name + " must have counts 1-8")
 		for c in counts:
 			var actions := {}
@@ -27,15 +32,12 @@ func _init(path: String) -> void:
 					feet[side] = _v(c[side].target, p.lift if a == "lift" else 0.0)
 			states.append({"count": int(c.count), "basic": basic_name, "weight": c.weight,
 				"action": actions, "feet": feet.duplicate()})
+		basics[basic_name] = states
 
 
 ## Dancer-frame foot position (x, lift, z).
 func _v(xz: Array, y: float) -> Vector3:
 	return Vector3(xz[0], y, xz[1])
-
-
-func size() -> int:
-	return states.size()
 
 
 static func _other(side: String) -> String:
@@ -77,17 +79,17 @@ static func _split(segs: Array) -> Array:
 	return [segs.slice(0, k + 1), segs.slice(k + 1)]
 
 
-## Pose at time t (beats, already wrapped into [0, size())).
+## Pose at time t (beats into the current basic, in [0, 8)). `prev`/`next` are the basics
+## danced before/after `cur`, so the moves across count 1 blend into the right states.
 ## Square timing: the key event of every count lands exactly on its beat, the weight change
 ## always takes the last `weight_phase` of the beat, and moves that must wait for the weight
 ## to leave a foot (releases) play out in the first `release_phase` of the next beat.
-func sample(t: float) -> Dictionary:
-	var n := states.size()
+func sample(t: float, prev: String, cur: String, next: String) -> Dictionary:
 	var i := int(floor(t))
 	var s := t - i
-	var z: Dictionary = states[(i - 1 + n) % n]
-	var a: Dictionary = states[i]
-	var b: Dictionary = states[(i + 1) % n]
+	var z: Dictionary = basics[prev][7] if i == 0 else basics[cur][i - 1]
+	var a: Dictionary = basics[cur][i]
+	var b: Dictionary = basics[next][0] if i == 7 else basics[cur][i + 1]
 	var out := {"feet": a.feet.duplicate(), "pitch": {"L": 0.0, "R": 0.0},
 		"w_r": 1.0 if a.weight == "R" else 0.0, "dip": 0.0, "state": a}
 

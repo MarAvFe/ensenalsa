@@ -17,7 +17,8 @@
     "music_beats": 16,
     "music_offset": 0.0
   },
-  "routine": ["diagonal_basic", "diagonal_basic", "inline_basic"],
+  "start_basic": "diagonal_basic",
+  "labels": {"diagonal_basic": "Diagonal", "inline_basic": "Front-back"},
   "basics": {
     "diagonal_basic": [
       {"count": 1, "weight": "L", "L": {"target": [0.10, -0.30], "action": "step"}, "R": {"target": [0.18, 0], "action": "lift"}},

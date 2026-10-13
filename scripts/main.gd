@@ -1,5 +1,6 @@
 extends Node3D
-## Playback (BPM, play/pause, beat stepping, loop, speed), footprints, beat counter, weight marker.
+## Playback (BPM, play/pause, beat stepping, loop, speed), basic switching on count 1,
+## footprints, beat counter, weight marker, cameras, music.
 
 const Choreo := preload("res://scripts/choreo.gd")
 const GOLD := Color(1.0, 0.8, 0.2)
@@ -9,7 +10,11 @@ const FOOT_FWD := 0.07 # footprint centre sits this far ahead of the ankle
 @onready var dancer := $Dancer
 
 var ch: Choreo
-var t := -1.0 # beats; -1 wraps to the last count so playback starts by stepping into count 1
+var T := -1.0 # unwrapped beat clock; 8 beats per basic. -1 = count 8, so playback starts by stepping into 1
+var glide := 0.0 # beats still to travel after a beat-step button, played out at tempo
+var prev_basic: String
+var cur_basic: String
+var queued: String # takes over at the next count 1
 var playing := true
 var looping := true
 var bpm := 100.0
@@ -17,7 +22,7 @@ var speed := 1.0
 
 var ui := {}
 var prints := {} # "side:x,z" -> {mesh, ring}
-var prints_block := -1
+var prints_basic := ""
 var weight_disc: MeshInstance3D
 var cams: Array[Camera3D] = []
 var music := AudioStreamPlayer.new()
@@ -29,7 +34,9 @@ var next_seek_ms := 0
 func _ready() -> void:
 	ch = Choreo.new("res://data/routine.json")
 	bpm = ch.p.bpm
-	t = fposmod(t, ch.size())
+	prev_basic = ch.start_basic
+	cur_basic = ch.start_basic
+	queued = ch.start_basic
 	# Behind, front, head-down-to-feet. Dancer stands at the origin facing -Z.
 	for v in [[Vector3(0, 1.5, 2.3), Vector3(0, 0.55, -0.1)], [Vector3(0, 1.5, -2.4), Vector3(0, 0.6, 0)],
 			[Vector3(0, 1.78, 0.32), Vector3(0, 0, -0.18)]]:
@@ -42,6 +49,7 @@ func _ready() -> void:
 		cams.append(cam)
 	_build_ui()
 	set_camera(0)
+	pick_basic(ch.start_basic)
 	var stream: AudioStreamMP3 = load(ch.p.music)
 	stream.loop = true
 	stream.bpm = ch.p.music_bpm
@@ -60,16 +68,30 @@ func _ready() -> void:
 
 
 func _process(dt: float) -> void:
+	var rate := bpm / 60.0 * speed
+	var bar := floori(T / 8.0)
 	if playing:
-		t += dt * bpm / 60.0 * speed
-		if t >= ch.size() and not looping:
-			t = ch.size() - 1
+		T += dt * rate
+	elif glide != 0.0:
+		var d := clampf(glide, -dt * rate, dt * rate)
+		T += d
+		glide -= d
+	var new_bar := floori(T / 8.0)
+	if new_bar > bar:
+		if looping:
+			prev_basic = cur_basic
+			cur_basic = queued
+		else:
+			T = bar * 8 + 7.0 # stop on count 8
 			playing = false
-		t = fposmod(t, ch.size())
-	var pose := ch.sample(t)
+			glide = 0.0
+	elif new_bar < bar:
+		prev_basic = cur_basic # stepping back over count 1: stay in this basic
+	var t := fposmod(T, 8.0)
+	var pose := ch.sample(t, prev_basic, cur_basic, queued)
 	dancer.apply(pose.feet, pose.pitch, pose.w_r, ch.p.pelvis_over_foot, ch.p.pelvis_height, pose.dip)
 	ui.play.text = "Pause" if playing else "Play"
-	_update_markers(pose)
+	_update_markers(pose, t)
 	_sync_music()
 
 
@@ -83,7 +105,7 @@ func _sync_music() -> void:
 	music.pitch_scale = rate
 	stretch.pitch_scale = 1.0 / rate
 	var beats: float = ch.p.music_beats
-	var want: float = fposmod(t, beats) * 60.0 / ch.p.music_bpm + ch.p.music_offset
+	var want: float = fposmod(T, beats) * 60.0 / ch.p.music_bpm + ch.p.music_offset
 	var length: float = beats * 60.0 / ch.p.music_bpm
 	if not music.playing:
 		music.play(want)
@@ -95,7 +117,7 @@ func _sync_music() -> void:
 			next_seek_ms = Time.get_ticks_msec() + 1000
 			music.seek(want) # after a jump (beat step, resume): realign the audio once
 	else:
-		t += err * ch.p.music_bpm / 60.0 * 0.05 # otherwise ease the dance clock onto the audio, no audible seeks
+		T += err * ch.p.music_bpm / 60.0 * 0.05 # otherwise ease the dance clock onto the audio, no audible seeks
 
 
 ## Floor position (Godot) of the footprint for a dancer-frame foot position.
@@ -103,12 +125,11 @@ func _floor_pos(f: Vector3, y := 0.002) -> Vector3:
 	return dancer.global_transform * Vector3(f.x, y, -f.z - FOOT_FWD)
 
 
-func _update_markers(pose: Dictionary) -> void:
+func _update_markers(pose: Dictionary, t: float) -> void:
 	var i := int(floor(t))
 	var st: Dictionary = pose.state
-	var block := i / 8 * 8
-	if block != prints_block:
-		_build_prints(block)
+	if cur_basic != prints_basic:
+		_build_prints(cur_basic)
 	for key in prints:
 		var pr: Dictionary = prints[key]
 		var side: String = key.left(1)
@@ -129,21 +150,23 @@ func _update_markers(pose: Dictionary) -> void:
 		var col := GOLD if tap else Color(0.85, 0.85, 0.9)
 		lbl.add_theme_color_override("font_color", col if cur else col.darkened(0.55))
 		lbl.add_theme_font_size_override("font_size", 84 if cur else 52)
-	ui.info.text = "%s  (%d/%d)   •   weight %s" % [st.basic.replace("_", " "), i / 8 + 1, ch.size() / 8, w_side]
+	ui.info.text = "%s   •   weight %s" % [ch.labels[cur_basic], w_side]
+	if queued != cur_basic:
+		ui.info.text += "   •   %s on the next 1" % ch.labels[queued]
 
 
 func _key(side: String, f: Vector3) -> String:
 	return "%s:%.2f,%.2f" % [side, f.x, f.z]
 
 
-## Footprints for the 8-count block starting at state index `block`.
-func _build_prints(block: int) -> void:
-	prints_block = block
+## Footprints for one basic.
+func _build_prints(basic: String) -> void:
+	prints_basic = basic
 	for pr in prints.values():
 		pr.mesh.queue_free()
 	prints.clear()
 	var counts := {}
-	for st in ch.states.slice(block, block + 8):
+	for st in ch.basics[basic]:
 		for side in ["L", "R"]:
 			if st.action[side] in ["step", "place", "tap"]:
 				var key := _key(side, st.feet[side])
@@ -191,22 +214,33 @@ func _flat(mesh: Mesh, col: Color, alpha: float) -> MeshInstance3D:
 	return mi
 
 
+## Glide to the next/previous count at the current tempo instead of jumping.
 func step_beat(dir: int) -> void:
 	playing = false
-	t = fposmod(roundf(t) + dir, ch.size())
+	glide = roundf(T + glide) + dir - T
+
+
+func toggle_play() -> void:
+	playing = not playing
+	glide = 0.0
 
 
 func set_camera(k: int) -> void:
 	cams[k].make_current()
-	for j in 3:
-		ui.cam_buttons[j].button_pressed = j == k
+	ui.cam.select(k)
+
+
+func pick_basic(basic: String) -> void:
+	queued = basic
+	for name in ui.basic_buttons:
+		ui.basic_buttons[name].button_pressed = name == basic
 
 
 func _unhandled_key_input(e: InputEvent) -> void:
 	if not e.is_pressed():
 		return
 	match e.keycode:
-		KEY_SPACE: playing = not playing
+		KEY_SPACE: toggle_play()
 		KEY_RIGHT: step_beat(1)
 		KEY_LEFT: step_beat(-1)
 		KEY_1, KEY_2, KEY_3: set_camera(e.keycode - KEY_1)
@@ -216,17 +250,11 @@ func _unhandled_key_input(e: InputEvent) -> void:
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
-	var bar := HBoxContainer.new()
-	bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bar.offset_left = 8
-	bar.offset_top = -44
-	bar.offset_bottom = -8
-	bar.add_theme_constant_override("separation", 8)
-	layer.add_child(bar)
 
 	var top := VBoxContainer.new()
 	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	top.offset_top = 8
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(top)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -243,56 +271,98 @@ func _build_ui() -> void:
 	ui.info = _label(top, "")
 	ui.info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ui.info.add_theme_font_size_override("font_size", 20)
-	var credit := _label(layer, "Music: \"Salsa 90 BPM\" by TheLastOneOnEarth (freesound.org), CC BY 4.0")
-	credit.add_theme_font_size_override("font_size", 11)
-	credit.modulate.a = 0.6
-	credit.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 8)
-	credit.position.y -= 44 # sit above the control bar
 
-	ui.play = _button(bar, "Pause", func(): playing = not playing)
-	_button(bar, "< Beat", step_beat.bind(-1))
-	_button(bar, "Beat >", step_beat.bind(1))
-	var loop := CheckBox.new()
-	loop.text = "Loop"
-	loop.button_pressed = looping
-	loop.toggled.connect(func(on): looping = on)
-	loop.focus_mode = Control.FOCUS_NONE
-	bar.add_child(loop)
+	# top right: camera dropdown
+	ui.cam = OptionButton.new()
+	for name in ["1  Behind", "2  Front", "3  Feet"]:
+		ui.cam.add_item(name)
+	ui.cam.focus_mode = Control.FOCUS_NONE
+	ui.cam.item_selected.connect(set_camera)
+	_corner(layer, ui.cam, Control.PRESET_TOP_RIGHT)
 
-	ui.music = CheckBox.new()
-	ui.music.text = "Music"
-	ui.music.button_pressed = music_on
-	ui.music.toggled.connect(func(on): music_on = on)
-	ui.music.focus_mode = Control.FOCUS_NONE
-	bar.add_child(ui.music)
+	# bottom centre: transport
+	var transport := HBoxContainer.new()
+	transport.add_theme_constant_override("separation", 8)
+	_button(transport, "< Beat", step_beat.bind(-1))
+	ui.play = _button(transport, "Pause", toggle_play)
+	ui.play.custom_minimum_size.x = 80
+	_button(transport, "Beat >", step_beat.bind(1))
+	_corner(layer, transport, Control.PRESET_CENTER_BOTTOM)
 
-	_label(bar, "BPM")
+	# bottom left: settings, collapsed under a gear
+	var settings := VBoxContainer.new()
+	var panel := PanelContainer.new()
+	panel.visible = false
+	settings.add_child(panel)
+	var opts := VBoxContainer.new()
+	panel.add_child(opts)
+	var loop := _check(opts, "Loop", looping, func(on): looping = on)
+	loop.tooltip_text = "Off: stop on count 8"
+	ui.music = _check(opts, "Music  (M)", music_on, func(on): music_on = on)
+	var bpm_row := HBoxContainer.new()
+	opts.add_child(bpm_row)
+	_label(bpm_row, "BPM")
 	var bpm_box := SpinBox.new()
 	bpm_box.min_value = 40
 	bpm_box.max_value = 220
 	bpm_box.value = bpm
 	bpm_box.value_changed.connect(func(v): bpm = v)
-	bar.add_child(bpm_box)
-
-	var speed_lbl := _label(bar, "Speed 1.00x")
+	bpm_row.add_child(bpm_box)
+	var speed_lbl := _label(opts, "Speed 1.00x")
 	var sl := HSlider.new()
 	sl.min_value = 0.25
 	sl.max_value = 1.0
 	sl.step = 0.05
 	sl.value = speed
-	sl.custom_minimum_size.x = 140
-	sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	sl.custom_minimum_size.x = 160
 	sl.focus_mode = Control.FOCUS_NONE
 	sl.value_changed.connect(func(v): speed = v; speed_lbl.text = "Speed %.2fx" % v)
-	bar.add_child(sl)
+	opts.add_child(sl)
+	var gear := _button(settings, "", func(): panel.visible = not panel.visible)
+	gear.icon = load("res://assets/gear.svg")
+	gear.tooltip_text = "Settings"
+	gear.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_corner(layer, settings, Control.PRESET_BOTTOM_LEFT)
 
-	ui.cam_buttons = []
+	# bottom right: basics (switch on the next count 1) + music credit
+	var right := VBoxContainer.new()
+	right.alignment = BoxContainer.ALIGNMENT_END
+	var credit := _label(right, "Music: \"Salsa 90 BPM\" by TheLastOneOnEarth (freesound.org), CC BY 4.0")
+	credit.add_theme_font_size_override("font_size", 11)
+	credit.modulate.a = 0.6
+	credit.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	var basics_row := HBoxContainer.new()
+	basics_row.alignment = BoxContainer.ALIGNMENT_END
+	right.add_child(basics_row)
+	ui.basic_buttons = {}
 	var group := ButtonGroup.new()
-	for k in 3:
-		var b := _button(bar, ["1 Behind", "2 Front", "3 Feet"][k], set_camera.bind(k))
+	for name in ch.basics:
+		var b := _button(basics_row, ch.labels[name], pick_basic.bind(name))
 		b.toggle_mode = true
 		b.button_group = group
-		ui.cam_buttons.append(b)
+		ui.basic_buttons[name] = b
+	_corner(layer, right, Control.PRESET_BOTTOM_RIGHT)
+
+
+## Pin `c` to a screen corner/edge; it sizes itself to its content and grows inward.
+func _corner(layer: CanvasLayer, c: Control, preset: Control.LayoutPreset) -> void:
+	layer.add_child(c)
+	c.set_anchors_and_offsets_preset(preset, Control.PRESET_MODE_MINSIZE, 10)
+	var left := preset in [Control.PRESET_TOP_RIGHT, Control.PRESET_BOTTOM_RIGHT]
+	var up := preset in [Control.PRESET_BOTTOM_LEFT, Control.PRESET_BOTTOM_RIGHT, Control.PRESET_CENTER_BOTTOM]
+	c.grow_horizontal = Control.GROW_DIRECTION_BOTH if preset == Control.PRESET_CENTER_BOTTOM \
+		else (Control.GROW_DIRECTION_BEGIN if left else Control.GROW_DIRECTION_END)
+	c.grow_vertical = Control.GROW_DIRECTION_BEGIN if up else Control.GROW_DIRECTION_END
+
+
+func _check(parent: Control, text: String, on: bool, cb: Callable) -> CheckBox:
+	var c := CheckBox.new()
+	c.text = text
+	c.button_pressed = on
+	c.focus_mode = Control.FOCUS_NONE
+	c.toggled.connect(cb)
+	parent.add_child(c)
+	return c
 
 
 func _button(parent: Control, text: String, cb: Callable) -> Button:

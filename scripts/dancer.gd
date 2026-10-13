@@ -49,8 +49,9 @@ func _ready() -> void:
 		var ankle := _joint(knee, "Foot" + side, Vector3(0, -SHIN, 0))
 		_box(ankle, Vector3(0.10, 0.06, 0.26), Vector3(0, -ANKLE_H + 0.03, -0.07), col)
 		legs[side] = {"hip": hip, "knee": knee, "ankle": ankle}
-	for m in pelvis.get_node("Spine1").find_children("*", "MeshInstance3D", true, false):
-		m.layers = 2 # upper body: hidden from the head-down feet camera
+	for m in pelvis.get_node("Spine1").find_children("*", "MeshInstance3D", true, false) \
+			+ pelvis.find_children("*", "MeshInstance3D", false, false):
+		m.layers = 2 # hips and up: hidden from the head-down feet camera
 	for side in ["L", "R"]:
 		var sx := -1.0 if side == "L" else 1.0
 		solve_leg(side, global_transform * Vector3(0.18 * sx, ANKLE_H, 0))
