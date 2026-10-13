@@ -18,6 +18,7 @@ const UPPER_ARM := 0.30
 const FOREARM := 0.27
 
 @export var head_color := Color(0.55, 0.3, 0.8) # leader purple; the follower sets orange
+@export var dim := 0.0 # darkens every colour (the follower is dimmer so the leader reads first)
 
 var pelvis: Node3D
 var legs := {} # "L"/"R" -> {hip, knee, ankle}
@@ -166,7 +167,7 @@ func _joint(parent: Node3D, n: String, pos: Vector3) -> Node3D:
 
 func _mat(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
-	m.albedo_color = c
+	m.albedo_color = c.darkened(dim)
 	return m
 
 

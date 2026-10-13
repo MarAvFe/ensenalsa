@@ -23,6 +23,7 @@
   },
   "start_basic": "diagonal_basic",
   "start_style": "flat",
+  "follower": {"diagonal_basic": "mirror", "inline_basic": "opposite", "side_basic": "opposite"},
   "styles": {
     "flat":    {"label": "Flat",    "release_hands": 0.0, "hip_twist": 0.0, "arm_forward": 0.0,  "arm_out": 0.12, "elbow": 0.35, "forearm_in": 0.0},
     "natural": {"label": "Natural", "release_hands": 1.0, "hip_twist": 1.6, "arm_forward": 0.25, "arm_out": 0.15, "elbow": 2.25, "forearm_in": 0.7}

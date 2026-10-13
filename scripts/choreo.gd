@@ -7,6 +7,7 @@ const SIDES := ["L", "R"]
 
 var p: Dictionary # params from the data file
 var basics := {} # name -> 8 states {count, basic, weight, action:{L,R}, feet:{L:Vector3,R:Vector3}}
+var follower := {} # name -> the follower's 8 states, derived from the leader's (see _follow)
 var labels: Dictionary # name -> button label
 var start_basic: String
 var styles: Dictionary # name -> {label, hip_twist, arm_forward, arm_out, elbow}
@@ -41,6 +42,21 @@ func _init(path: String) -> void:
 				"action": actions, "feet": feet.duplicate(), "pitch": pitch.duplicate(),
 				"free": {"L": 1.0 if "L" in free_hands else 0.0, "R": 1.0 if "R" in free_hands else 0.0}})
 		basics[basic_name] = states
+		follower[basic_name] = states.map(_follow.bind(data.follower[basic_name]))
+
+
+## The follower's state for a leader state: sides swapped and x flipped in her own frame.
+## "mirror": face-to-face mirror, z kept (he steps back, she steps back).
+## "opposite": z flipped too (he steps forward, she steps back), so the couple moves together.
+static func _follow(st: Dictionary, mode: String) -> Dictionary:
+	var zs := 1.0 if mode == "mirror" else -1.0
+	var flip := func(v: Vector3) -> Vector3: return Vector3(-v.x, v.y, v.z * zs)
+	var f := st.duplicate()
+	f.feet = {"L": flip.call(st.feet.R), "R": flip.call(st.feet.L)}
+	f.pitch = {"L": st.pitch.R, "R": st.pitch.L}
+	f.action = {"L": st.action.R, "R": st.action.L}
+	f.weight = "R" if st.weight == "L" else "L"
+	return f # `free` stays keyed by the leader's hand of each held pair
 
 
 ## Dancer-frame foot position (x, lift, z).
@@ -93,12 +109,14 @@ static func _split(segs: Array) -> Array:
 ## Square timing: the key event of every count lands exactly on its beat, the weight change
 ## always takes the last `weight_phase` of the beat, and moves that must wait for the weight
 ## to leave a foot (releases) play out in the first `release_phase` of the next beat.
-func sample(t: float, prev: String, cur: String, next: String) -> Dictionary:
+## `as_follower` samples the follower's states instead of the leader's.
+func sample(t: float, prev: String, cur: String, next: String, as_follower := false) -> Dictionary:
+	var src := follower if as_follower else basics
 	var i := int(floor(t))
 	var s := t - i
-	var z: Dictionary = basics[prev][7] if i == 0 else basics[cur][i - 1]
-	var a: Dictionary = basics[cur][i]
-	var b: Dictionary = basics[next][0] if i == 7 else basics[cur][i + 1]
+	var z: Dictionary = src[prev][7] if i == 0 else src[cur][i - 1]
+	var a: Dictionary = src[cur][i]
+	var b: Dictionary = src[next][0] if i == 7 else src[cur][i + 1]
 	var out := {"feet": a.feet.duplicate(), "pitch": a.pitch.duplicate(),
 		"w_r": 1.0 if a.weight == "R" else 0.0, "dip": 0.0, "state": a}
 
@@ -109,18 +127,6 @@ func sample(t: float, prev: String, cur: String, next: String) -> Dictionary:
 	# how far R is ahead of L relative to home (metres); a style's hip_twist turns it into hip yaw
 	out.twist = (out.feet.R.z - p.home_R[1]) - (out.feet.L.z - p.home_L[1])
 	return out
-
-
-## The follower's pose: the leader's mirrored (sides swapped, x and z flipped in her own frame),
-## which in the world is the same movement, so the couple keeps its distance.
-static func mirror(pose: Dictionary) -> Dictionary:
-	var flip := func(v: Vector3) -> Vector3: return Vector3(-v.x, v.y, -v.z)
-	var m := pose.duplicate()
-	m.feet = {"L": flip.call(pose.feet.R), "R": flip.call(pose.feet.L)}
-	m.pitch = {"L": pose.pitch.R, "R": pose.pitch.L}
-	m.w_r = 1.0 - pose.w_r
-	m.pelvis = flip.call(pose.pelvis)
-	return m # twist is unchanged: R-ahead-of-L flips twice
 
 
 ## Pelvis over the weight, measured on the home stance. On a break step (weighted foot away
