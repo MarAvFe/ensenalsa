@@ -18,7 +18,7 @@
     "music_offset": 0.0
   },
   "start_basic": "diagonal_basic",
-  "labels": {"diagonal_basic": "Diagonal", "inline_basic": "Front-back"},
+  "labels": {"diagonal_basic": "Diagonal", "inline_basic": "Front-back", "side_basic": "Sides"},
   "basics": {
     "diagonal_basic": [
       {"count": 1, "weight": "L", "L": {"target": [0.10, -0.30], "action": "step"}, "R": {"target": [0.18, 0], "action": "lift"}},
@@ -36,6 +36,16 @@
       {"count": 3, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},     "R": {"target": [0.18, 0], "action": "lift"}},
       {"count": 4, "weight": "L", "L": {"target": [-0.18, 0], "action": "hold"},     "R": {"target": [0.18, 0], "action": "tap"}},
       {"count": 5, "weight": "R", "L": {"target": [-0.18, 0], "action": "tap"},      "R": {"target": [0.18, -0.30], "action": "step"}},
+      {"count": 6, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},     "R": {"target": [0.18, 0], "action": "place"}},
+      {"count": 7, "weight": "R", "L": {"target": [-0.18, 0], "action": "lift"},     "R": {"target": [0.18, 0], "action": "step"}},
+      {"count": 8, "weight": "R", "L": {"target": [-0.18, 0], "action": "tap"},      "R": {"target": [0.18, 0], "action": "hold"}}
+    ],
+    "side_basic": [
+      {"count": 1, "weight": "L", "L": {"target": [-0.48, 0], "action": "step"},  "R": {"target": [0.18, 0], "action": "tap"}},
+      {"count": 2, "weight": "R", "L": {"target": [-0.18, 0], "action": "place"},    "R": {"target": [0.18, 0], "action": "step"}},
+      {"count": 3, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},     "R": {"target": [0.18, 0], "action": "lift"}},
+      {"count": 4, "weight": "L", "L": {"target": [-0.18, 0], "action": "hold"},     "R": {"target": [0.18, 0], "action": "tap"}},
+      {"count": 5, "weight": "R", "L": {"target": [-0.18, 0], "action": "tap"},      "R": {"target": [0.48, 0], "action": "step"}},
       {"count": 6, "weight": "L", "L": {"target": [-0.18, 0], "action": "step"},     "R": {"target": [0.18, 0], "action": "place"}},
       {"count": 7, "weight": "R", "L": {"target": [-0.18, 0], "action": "lift"},     "R": {"target": [0.18, 0], "action": "step"}},
       {"count": 8, "weight": "R", "L": {"target": [-0.18, 0], "action": "tap"},      "R": {"target": [0.18, 0], "action": "hold"}}

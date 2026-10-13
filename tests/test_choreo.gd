@@ -9,14 +9,17 @@ func _initialize() -> void:
 	var d: Node3D = load("res://scripts/dancer.gd").new()
 	root.add_child(d)
 	await process_frame
-	var seq := ["diagonal_basic", "diagonal_basic", "inline_basic", "inline_basic"] # every switch pair
+	var D := "diagonal_basic"
+	var I := "inline_basic"
+	var S := "side_basic"
+	var seq := [D, D, I, I, S, S, I, D, S] # cycle containing all 9 ordered switch pairs
 	var beats := seq.size() * 8
 	var at := func(T: float) -> Dictionary: # pose at global beat T, wrapping over seq
 		T = fposmod(T, beats)
 		var k := int(T / 8)
-		return ch.sample(fmod(T, 8.0), seq[(k + 3) % 4], seq[k], seq[(k + 1) % 4])
+		return ch.sample(fmod(T, 8.0), seq[(k + seq.size() - 1) % seq.size()], seq[k], seq[(k + 1) % seq.size()])
 	var fails := 0
-	var n := 6000
+	var n := 14000
 	var prev = null
 	for k in n + 1:
 		var t := float(k) / n * beats - 1.0

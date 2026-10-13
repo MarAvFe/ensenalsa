@@ -6,6 +6,7 @@ const Choreo := preload("res://scripts/choreo.gd")
 const GOLD := Color(1.0, 0.8, 0.2)
 const SIDE_COL := {"L": Color(0.25, 0.45, 0.95), "R": Color(0.95, 0.3, 0.25)}
 const FOOT_FWD := 0.07 # footprint centre sits this far ahead of the ankle
+const CAM_NAMES := ["Behind", "Front", "Feet (from head)", "Feet (side)", "Behind 30°", "Front 30°"]
 
 @onready var dancer := $Dancer
 
@@ -37,13 +38,17 @@ func _ready() -> void:
 	prev_basic = ch.start_basic
 	cur_basic = ch.start_basic
 	queued = ch.start_basic
-	# Behind, front, head-down-to-feet. Dancer stands at the origin facing -Z.
+	# [eye, look-at] per entry in CAM_NAMES. Dancer stands at the origin facing -Z, right = +X.
+	var r30 := Basis(Vector3.UP, deg_to_rad(30)) # orbit 30° toward the dancer's right
 	for v in [[Vector3(0, 1.5, 2.3), Vector3(0, 0.55, -0.1)], [Vector3(0, 1.5, -2.4), Vector3(0, 0.6, 0)],
-			[Vector3(0, 1.78, 0.32), Vector3(0, 0, -0.18)]]:
+			[Vector3(0, 1.78, 0.32), Vector3(0, 0, -0.18)], [Vector3(2.6, 0.45, -0.05), Vector3(0, 0.12, -0.05)],
+			[r30 * Vector3(0, 1.5, 2.3), Vector3(0, 0.55, 0)], [r30.inverse() * Vector3(0, 1.5, -2.4), Vector3(0, 0.6, 0)]]:
 		var cam := Camera3D.new()
 		cam.near = 0.03
 		if cams.size() == 2:
 			cam.cull_mask = 1 # feet cam skips the upper body (layer 2)
+		if cams.size() == 3:
+			cam.fov = 38 # side close-up from far enough to keep wide steps in frame
 		add_child(cam)
 		cam.look_at_from_position(v[0], v[1])
 		cams.append(cam)
@@ -243,7 +248,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		KEY_SPACE: toggle_play()
 		KEY_RIGHT: step_beat(1)
 		KEY_LEFT: step_beat(-1)
-		KEY_1, KEY_2, KEY_3: set_camera(e.keycode - KEY_1)
+		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6: set_camera(e.keycode - KEY_1)
 		KEY_M: ui.music.button_pressed = not music_on
 
 
@@ -274,8 +279,8 @@ func _build_ui() -> void:
 
 	# top right: camera dropdown
 	ui.cam = OptionButton.new()
-	for name in ["1  Behind", "2  Front", "3  Feet"]:
-		ui.cam.add_item(name)
+	for k in CAM_NAMES.size():
+		ui.cam.add_item("%d  %s" % [k + 1, CAM_NAMES[k]])
 	ui.cam.focus_mode = Control.FOCUS_NONE
 	ui.cam.item_selected.connect(set_camera)
 	_corner(layer, ui.cam, Control.PRESET_TOP_RIGHT)

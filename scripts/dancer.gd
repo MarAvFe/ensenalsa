@@ -64,7 +64,14 @@ func apply(feet: Dictionary, pitch: Dictionary, w_r: float, over: float, height:
 	var l: Vector3 = feet.L
 	var r: Vector3 = feet.R
 	var c := l.lerp(r, (1.0 - over) + (2.0 * over - 1.0) * w_r)
-	pelvis.position = Vector3(c.x, height - dip, -c.z)
+	var y := height - dip
+	for side in ["L", "R"]: # wide stance: sink the pelvis just enough that both legs keep a slight bend
+		var f: Vector3 = feet[side]
+		var hip := Vector2(c.x + HIP_X * (-1.0 if side == "L" else 1.0), c.z)
+		var flat := hip.distance_to(Vector2(f.x, f.z))
+		var reach := (THIGH + SHIN) * 0.97
+		y = minf(y, ANKLE_H + f.y + HIP_DROP + sqrt(maxf(reach * reach - flat * flat, 0.0)))
+	pelvis.position = Vector3(c.x, y, -c.z)
 	for side in ["L", "R"]:
 		var f: Vector3 = feet[side]
 		solve_leg(side, global_transform * Vector3(f.x, ANKLE_H + f.y, -f.z), pitch.get(side, 0.0))

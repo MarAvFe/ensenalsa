@@ -26,15 +26,15 @@ The export uses the single-threaded web template, so it needs no special COOP/CO
 | Where | Control | Action |
 |---|---|---|
 | bottom centre | `< Beat` / `Pause` / `Beat >` (← / Space / →) | glide one count back / play-pause / glide one count forward |
-| bottom right | `Diagonal` / `Front-back` | queue a basic; the dancer switches on the next count 1 |
-| top right | camera dropdown (1 / 2 / 3) | behind, front, head-down-to-feet (hips and up hidden) |
+| bottom right | `Diagonal` / `Front-back` / `Sides` | queue a basic; the dancer switches on the next count 1 |
+| top right | camera dropdown (1–6) | behind, front, head-down-to-feet (hips and up hidden), feet close-up from the side, behind 30°, front 30° |
 | bottom left | gear | Loop (off = stop on count 8), Music (M), BPM (default 100), Speed 0.25x–1x |
 
 ## How it works
 
 - `data/routine.json` holds **all** values: parameters (home stance, lift, tap height, pelvis height/shift/dip, BPM, music), the basics with their button `labels`, and the `start_basic`. The selected basic loops; picking another one queues it for the next count 1. Each basic is 8 counts. Each count has `weight` (`L`/`R`) and, per foot, `{target: [x, z], action}` with action `step | place | lift | tap | hold`. Coordinates are dancer-local: +X right, +Z forward (the code maps +Z to Godot −Z).
 - `scripts/choreo.gd` expands the routine into one state per beat. Within each beat it orders the sub-moves so **weight always leaves a foot before that foot moves**, and a stepping foot moves before it takes weight, so the planted foot never slides. Timing is **square**: every weight change takes the last `weight_phase` of its beat and lands exactly on the count. Moves that have to wait for the weight to leave a foot (lifting it, or bringing it home on 2 and 6) happen in the first `release_phase` of the next beat. A basic always spans counts 1–8, so switches only happen on count 1.
-- `scripts/dancer.gd` builds the figure (pelvis → 3 spine segments → neck/head, arms; thighs → shins → feet) and solves each leg with a two-bone IK (law of cosines, knee pole toward the dancer's front). The pelvis moves over the weighted foot and dips during weight changes.
+- `scripts/dancer.gd` builds the figure (pelvis → 3 spine segments → neck/head, arms; thighs → shins → feet) and solves each leg with a two-bone IK (law of cosines, knee pole toward the dancer's front). The pelvis moves over the weighted foot, dips during weight changes, and sinks just enough in a wide stance (Sides) that both legs keep a slight bend.
 - `scripts/main.gd` runs playback on an unwrapped beat clock (8 beats per basic; the queued basic takes over when the clock crosses a count 1), the HUD, footprints (one per target, labelled with its counts; tap targets carry a gold ring that pulses on the tap), the weight disc, cameras and music.
 
 ## Tests
