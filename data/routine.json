@@ -14,6 +14,10 @@
     "hold_drop": 0.38,
     "prep_reach": 0.07,
     "prep_shoulder": 0.4,
+    "spin_closed": 0.08,
+    "spin_raise": 1.7,
+    "spin_toward": 0.25,
+    "spin_lasso": 0.05,
     "pelvis_dip": 0.03,
     "weight_phase": 0.4,
     "release_phase": 0.45,
@@ -25,6 +29,7 @@
   },
   "start_basic": "diagonal_basic",
   "start_style": "flat",
+  "spins": {"diagonal_basic": ["leader", "follower"], "inline_basic": ["follower"], "side_basic": ["follower"]},
   "follower": {"diagonal_basic": "mirror", "inline_basic": "opposite", "side_basic": "opposite"},
   "styles": {
     "flat":    {"label": "Flat",    "release_hands": 0.0, "hip_twist": 0.0, "arm_forward": 0.0,  "arm_out": 0.12, "elbow": 0.35, "forearm_in": 0.0},

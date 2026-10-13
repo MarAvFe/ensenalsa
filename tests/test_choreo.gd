@@ -4,7 +4,8 @@ extends SceneTree
 ## the weight-bearing foot never slides, every IK target is reachable (no knee pop), nothing jumps
 ## between samples (no teleporting), and timing is square: every weight change happens inside the
 ## last `weight_phase` of its beat, landing on it. Reach and square shoulders are checked in every
-## style (hip twist moves the hips); taps land on the toe tip; held hands meet.
+## style (hip twist moves the hips); taps land on the toe tip; held hands meet; spins never slide
+## the planted foot (it only pivots) and stay reachable.
 
 func _initialize() -> void:
 	var ch = load("res://scripts/choreo.gd").new("res://data/routine.json")
@@ -119,5 +120,39 @@ func _initialize() -> void:
 				if hand.distance_to(target) > 0.01:
 					fails += 1
 					printerr("FAIL T=%.2f: hand %s misses the hold by %.3f" % [c[0], pair[1], hand.distance_to(target)])
+	# spins: every basic, both dancers, turning on 1-3 and on 5-7, with the bars around it
+	for name in ch.basics:
+		for as_follower in [false, true]:
+			var d: Node3D = fol if as_follower else lead
+			var src: Dictionary = ch.follower if as_follower else ch.basics
+			for half in [0, 1]:
+				var arr: Array = ch.spun(src[name], half)
+				var start: float = half * 4.0
+				var prev = null
+				for k in 3001:
+					var T := -1.0 + 9.0 * k / 3000.0
+					var framed: Dictionary = ch.sample_states(T + 8.0, src[name], src[name], arr) if T < 0.0 \
+						else ch.sample_states(minf(T, 7.9999), src[name], arr, src[name])
+					var tag := "%s %s spin@%d T=%.3f" % [name, "follower" if as_follower else "leader", half * 4 + 1, T]
+					for side in ["L", "R"]:
+						if prev != null:
+							var share: float = framed.w_r if side == "R" else 1.0 - framed.w_r
+							var prev_share: float = prev.w_r if side == "R" else 1.0 - prev.w_r
+							var moved: float = framed.feet[side].distance_to(prev.feet[side])
+							if share > 0.5 and prev_share > 0.5 and moved > 1e-6:
+								fails += 1
+								printerr("FAIL weighted %s slid %.4f %s" % [side, moved, tag])
+							if moved > 0.03:
+								fails += 1
+								printerr("FAIL %s jumped %.3f %s" % [side, moved, tag])
+					prev = framed
+					var pose: Dictionary = ch.unturn(framed, ch.spin_angle(T, start))
+					d.apply(pose.feet, pose.pitch, pose.pelvis, ch.p.pelvis_height, pose.dip)
+					for side in ["L", "R"]:
+						var f: Vector3 = pose.feet[side]
+						var target: Vector3 = d.global_transform * Vector3(f.x, d.ANKLE_H + f.y, -f.z)
+						if d.legs[side].hip.global_position.distance_to(target) > d.THIGH + d.SHIN - 0.002:
+							fails += 1
+							printerr("FAIL unreachable %s %s" % [side, tag])
 	print("Choreo test (%d beats, leader + follower): %s" % [beats, "PASS" if fails == 0 else "%d FAILS" % fails])
 	quit(fails)

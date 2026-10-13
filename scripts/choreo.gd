@@ -4,10 +4,12 @@ extends RefCounted
 ## segments so a foot never moves while it holds weight.
 
 const SIDES := ["L", "R"]
+const SPIN_STEP := -TAU / 3.0 # turn per spin count; negative = clockwise from above = a right turn
 
 var p: Dictionary # params from the data file
 var basics := {} # name -> 8 states {count, basic, weight, action:{L,R}, feet:{L:Vector3,R:Vector3}}
 var follower := {} # name -> the follower's 8 states, derived from the leader's (see _follow)
+var spins: Dictionary # name -> who turns, in order, one half (4 counts) apart
 var labels: Dictionary # name -> button label
 var start_basic: String
 var styles: Dictionary # name -> {label, hip_twist, arm_forward, arm_out, elbow}
@@ -22,6 +24,7 @@ func _init(path: String) -> void:
 	start_basic = data.start_basic
 	styles = data.styles
 	start_style = data.start_style
+	spins = data.spins
 	for basic_name in data.basics:
 		var counts: Array = data.basics[basic_name]
 		var feet := {"L": _v(p.home_L, 0.0), "R": _v(p.home_R, 0.0)} # every basic starts and ends at home
@@ -122,11 +125,16 @@ static func _split(segs: Array) -> Array:
 ## `as_follower` samples the follower's states instead of the leader's.
 func sample(t: float, prev: String, cur: String, next: String, as_follower := false) -> Dictionary:
 	var src := follower if as_follower else basics
+	return sample_states(t, src[prev], src[cur], src[next])
+
+
+## sample() on explicit 8-state arrays (e.g. spin variants from spun()).
+func sample_states(t: float, prev: Array, cur: Array, next: Array) -> Dictionary:
 	var i := int(floor(t))
 	var s := t - i
-	var z: Dictionary = src[prev][7] if i == 0 else src[cur][i - 1]
-	var a: Dictionary = src[cur][i]
-	var b: Dictionary = src[next][0] if i == 7 else src[cur][i + 1]
+	var z: Dictionary = prev[7] if i == 0 else cur[i - 1]
+	var a: Dictionary = cur[i]
+	var b: Dictionary = next[0] if i == 7 else cur[i + 1]
 	var out := {"feet": a.feet.duplicate(), "pitch": a.pitch.duplicate(),
 		"w_r": 1.0 if a.weight == "R" else 0.0, "dip": 0.0, "state": a}
 
@@ -136,6 +144,53 @@ func sample(t: float, prev: String, cur: String, next: String, as_follower := fa
 	out.free = {"L": lerpf(a.free.L, b.free.L, e), "R": lerpf(a.free.R, b.free.R, e)}
 	# how far R is ahead of L relative to home (metres); a style's hip_twist turns it into hip yaw
 	out.twist = (out.feet.R.z - p.home_R[1]) - (out.feet.L.z - p.home_L[1])
+	return out
+
+
+## Spin variant of 8 states: on counts 1-3 (half 0) or 5-7 (half 1) the feet step closed under
+## the body while it makes one full right turn, 120° per count. Targets are given in the turning
+## frame (rotated by the turn reached on that count), so a planted foot stays put on the floor
+## while the body turns above it: it pivots in place. Weights and timing stay the basic's.
+func spun(states: Array, half: int) -> Array:
+	var out := []
+	for i in 8:
+		var st: Dictionary = states[i].duplicate(true)
+		var k := i - half * 4
+		if k >= 0 and k < 3:
+			for side in SIDES:
+				var closed := Vector3(p.spin_closed * (-1.0 if side == "L" else 1.0), st.feet[side].y, 0)
+				st.feet[side] = turn(closed, SPIN_STEP * (k + 1))
+				st.pitch[side] = 0.0
+				if st.action[side] == "tap":
+					st.action[side] = "place" # no taps mid-turn
+		out.append(st)
+	return out
+
+
+## Turn angle at global beat T for a spin whose count 1 (or 5) lands on beat S: it turns from
+## S-1 (moving into that count) to S+2, one third per beat, pausing on each count like steps.
+static func spin_angle(T: float, S: float) -> float:
+	var u := T - (S - 1.0)
+	if u <= 0.0 or u >= 3.0:
+		return 0.0
+	var k := floorf(u)
+	return SPIN_STEP * (k + smoothstep(0.0, 1.0, u - k))
+
+
+## Rotate a dancer-frame vector (x right, z forward) about the vertical by `angle` (Godot sense).
+static func turn(v: Vector3, angle: float) -> Vector3:
+	var g := Basis(Vector3.UP, angle) * Vector3(v.x, v.y, -v.z)
+	return Vector3(g.x, g.y, -g.z)
+
+
+## A pose sampled in the turning frame, expressed in the dancer's own (turned) frame.
+func unturn(pose: Dictionary, angle: float) -> Dictionary:
+	if angle == 0.0:
+		return pose
+	var out := pose.duplicate()
+	out.feet = {"L": turn(pose.feet.L, -angle), "R": turn(pose.feet.R, -angle)}
+	out.pelvis = turn(pose.pelvis, -angle)
+	out.twist = out.feet.R.z - out.feet.L.z
 	return out
 
 

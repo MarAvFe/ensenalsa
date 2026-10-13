@@ -32,6 +32,8 @@ var floor_numbers := false # count labels on the footprints
 var style: String # target style; `look` eases toward it so switching never snaps
 var look := {}
 var follower: Node3D
+var spins: Array[Dictionary] = [] # queued/running turns: {follower: bool, S: beat of their count 1 or 5}
+var spun_cache := {}
 var main_is_follower := false # whose point of view: cameras, footprints and weight follow the main dancer
 var pov := Node3D.new() # eases onto the main dancer's transform; all cameras hang under it
 var rig := Node3D.new() # under pov: cameras that frame the couple, centred between them when both dance
@@ -123,7 +125,12 @@ func _process(dt: float) -> void:
 	elif new_bar < bar:
 		prev_basic = cur_basic # stepping back over count 1: stay in this basic
 	var t := fposmod(T, 8.0)
-	var pose := ch.sample(t, prev_basic, cur_basic, queued)
+	spins = spins.filter(func(sp): return sp.S + 3.0 > T - 8.0) # keep a bar back for beat-stepping
+	var angle_l := _spin_angle(false)
+	var angle_f := _spin_angle(true)
+	dancer.rotation.y = angle_l
+	follower.rotation.y = PI + angle_f
+	var pose := _sample(t, false, angle_l)
 	if not music_on and (floori(T) > floori(T0) or ceili(T) < ceili(T0)): # landed on a count
 		var st: Dictionary = ch.basics[cur_basic][posmod(roundi(T), 8)]
 		tick.stream = tap_sound if "tap" in st.action.values() else tick_sound
@@ -135,9 +142,16 @@ func _process(dt: float) -> void:
 	var prep := 0.0
 	if queued != cur_basic:
 		prep = smoothstep(6.5, 7.0, t) * (1.0 - smoothstep(7.6, 8.0, t))
-	dancer.set_halo(prep * (0.8 + 0.2 * sin(TAU * 2.0 * t)))
-	var away := -ch.first_step(queued) # dancer frame
-	var lead: Vector3 = dancer.global_basis * Vector3(away.x, 0, -away.z) * prep * ch.p.prep_reach
+	var away := -ch.first_step(queued) # dancer frame, leader base frame = world
+	var lead: Vector3 = Vector3(away.x, 0, -away.z) * prep * ch.p.prep_reach
+	# a coming turn: the hands glow too, and before her turn he pushes toward her
+	var glow := prep
+	for sp in spins:
+		var cue := smoothstep(sp.S - 1.9, sp.S - 1.4, T) * (1.0 - smoothstep(sp.S - 1.1, sp.S - 0.8, T))
+		glow = maxf(glow, cue)
+		if sp.follower:
+			lead += Vector3.FORWARD * cue * ch.p.prep_reach
+	dancer.set_halo(glow * (0.8 + 0.2 * sin(TAU * 2.0 * t)))
 	var lead_style := look.duplicate()
 	lead_style.yaw = look.hip_twist * pose.twist
 	lead_style.lead = lead * ch.p.prep_shoulder
@@ -145,10 +159,10 @@ func _process(dt: float) -> void:
 	var ease := 1.0 - exp(-dt * 4.0)
 	var centre: float = -ch.p.partner_distance / 2.0 if follower.visible else 0.0
 	rig.position.z = lerpf(rig.position.z, centre, ease)
-	pov.transform = pov.transform.interpolate_with(main_dancer().transform, ease)
+	pov.transform = pov.transform.interpolate_with(_base(main_is_follower), ease)
 	var main_pose := pose
 	if follower.visible:
-		var m := ch.sample(t, prev_basic, cur_basic, queued, true)
+		var m := _sample(t, true, angle_f)
 		if main_is_follower:
 			main_pose = m
 		var look_f := look.duplicate()
@@ -160,6 +174,17 @@ func _process(dt: float) -> void:
 			var at: Vector3 = Dancer.hold_point(dancer.arms[side].upper.global_position,
 				follower.arms[other].upper.global_position, ch.p.hold_drop) + lead
 			var h: float = 1.0 - look.release_hands * pose.free[side]
+			for sp in spins: # turns: hands raised over / let go around the spinner
+				var r := smoothstep(sp.S - 1.6, sp.S - 0.9, T) * (1.0 - smoothstep(sp.S + 2.0, sp.S + 2.8, T))
+				if not sp.follower:
+					h *= 1.0 - r # he turns on his own
+				elif side == "R": # his right hand leads her turn: raised above her, circling with her
+					var lasso := Basis(Vector3.UP, angle_f) * Vector3(ch.p.spin_lasso, 0, 0)
+					var raised: Vector3 = follower.position + Vector3(0, ch.p.spin_raise, ch.p.spin_toward) + lasso
+					at = at.lerp(raised, r)
+					h = maxf(h, r)
+				else:
+					h *= 1.0 - r
 			dancer.hold(side, at, h)
 			follower.hold(other, at, h)
 	ui.play.text = "Pause" if playing else "Play"
@@ -194,7 +219,55 @@ func _sync_music() -> void:
 
 ## Floor position (Godot) of the footprint for a dancer-frame foot position.
 func _floor_pos(f: Vector3, y := 0.002) -> Vector3:
-	return main_dancer().global_transform * Vector3(f.x, y, -f.z - FOOT_FWD)
+	return _base(main_is_follower) * Vector3(f.x, y, -f.z - FOOT_FWD)
+
+
+## The dancer's unturned transform (spins rotate the node itself).
+func _base(is_follower: bool) -> Transform3D:
+	return Transform3D(Basis(Vector3.UP, PI), follower.position) if is_follower else Transform3D()
+
+
+func _spin_angle(is_follower: bool) -> float:
+	var a := 0.0
+	for sp in spins:
+		if sp.follower == is_follower:
+			a += Choreo.spin_angle(T, sp.S)
+	return a
+
+
+## Pose for one dancer at bar position t, with spin variants in the bars that hold a turn,
+## expressed in the dancer's own turned frame.
+func _sample(t: float, is_follower: bool, angle: float) -> Dictionary:
+	var bar := floori(T / 8.0)
+	return ch.unturn(ch.sample_states(t, _states(is_follower, prev_basic, bar - 1),
+		_states(is_follower, cur_basic, bar), _states(is_follower, queued, bar + 1)), angle)
+
+
+func _states(is_follower: bool, basic: String, bar: int) -> Array:
+	var src: Dictionary = ch.follower if is_follower else ch.basics
+	for sp in spins:
+		if sp.follower == is_follower and floori(sp.S / 8.0) == bar:
+			var half := int(fposmod(sp.S, 8.0) / 4.0)
+			var key := "%s|%s|%d" % [basic, is_follower, half]
+			if not spun_cache.has(key):
+				spun_cache[key] = ch.spun(src[basic], half)
+			return spun_cache[key]
+	return src[basic]
+
+
+## Queue a turn on the next count 1 or 5 that is still ahead (turning starts a beat before it).
+func queue_spin() -> void:
+	for sp in spins:
+		if sp.S + 3.0 > T:
+			return # one at a time
+	var S := ceilf((T + 1.05) / 4.0) * 4.0
+	var basic := queued if fposmod(S, 8.0) == 0.0 else cur_basic
+	var k := 0
+	for who in ch.spins[basic]: # e.g. diagonal: he turns, then she does 4 counts later
+		spins.append({"follower": who == "follower", "S": S + 4.0 * k})
+		k += 1
+	if not follower.visible:
+		spins = spins.filter(func(sp): return not sp.follower)
 
 
 func main_dancer() -> Node3D:
@@ -226,7 +299,8 @@ func _update_markers(pose: Dictionary, t: float) -> void:
 			var pulse := 1.0 + 0.8 * (1.0 - (t - i)) if active and act == "tap" else 1.0
 			pr.ring.scale = Vector3(pulse, 1, pulse)
 	var w_side := "R" if pose.w_r >= 0.5 else "L"
-	weight_disc.position = _floor_pos(pose.feet[w_side], 0.001)
+	var wf: Vector3 = pose.feet[w_side] # local to the (maybe turning) main dancer
+	weight_disc.position = main_dancer().global_transform * Vector3(wf.x, 0.001, -wf.z - FOOT_FWD)
 
 	for k in 8:
 		var c := k + 1
@@ -239,6 +313,10 @@ func _update_markers(pose: Dictionary, t: float) -> void:
 	ui.info.text = ch.labels[cur_basic]
 	if queued != cur_basic:
 		ui.info.text += "   •   %s on the next 1" % ch.labels[queued]
+	for sp in spins:
+		if sp.S - 1.0 > T:
+			ui.info.text += "   •   %s spins on the next %d" % ["Follower" if sp.follower else "Leader", 1 if fposmod(sp.S, 8.0) == 0.0 else 5]
+			break
 
 
 func _key(side: String, f: Vector3) -> String:
@@ -266,7 +344,7 @@ func _build_prints(basic: String) -> void:
 		var box := BoxMesh.new()
 		box.size = Vector3(0.10, 0.004, 0.26)
 		var m := _flat(box, main_dancer().side_colors[side], 0.3)
-		m.transform = Transform3D(main_dancer().global_basis, _floor_pos(Vector3(info.pos.x, 0, info.pos.z))) # labels read from the main POV
+		m.transform = Transform3D(_base(main_is_follower).basis, _floor_pos(Vector3(info.pos.x, 0, info.pos.z))) # labels read from the main POV
 		add_child(m)
 		var lbl := Label3D.new()
 		lbl.text = side + "\n" + " ".join(info.counts.map(func(c): return str(c)))
@@ -334,6 +412,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		KEY_M: ui.music.button_pressed = not music_on
 		KEY_F: ui.follower.button_pressed = not follower.visible
 		KEY_P: set_main(not main_is_follower)
+		KEY_S: queue_spin()
 
 
 func _build_ui() -> void:
@@ -454,6 +533,7 @@ func _build_ui() -> void:
 		b.toggle_mode = true
 		b.button_group = group
 		ui.basic_buttons[name] = b
+	_button(basics_row, "Spin  (S)", queue_spin).tooltip_text = "Turn on the next count 1 or 5"
 	_corner(layer, right, Control.PRESET_BOTTOM_RIGHT)
 
 
