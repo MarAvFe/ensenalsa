@@ -93,6 +93,24 @@ func sample(t: float, prev: String, cur: String, next: String) -> Dictionary:
 	var out := {"feet": a.feet.duplicate(), "pitch": {"L": 0.0, "R": 0.0},
 		"w_r": 1.0 if a.weight == "R" else 0.0, "dip": 0.0, "state": a}
 
+	_play_all(z, a, b, s, out)
+	out.pelvis = _pelvis(out.feet, out.w_r)
+	return out
+
+
+## Pelvis over the weight, measured on the home stance; when the weighted foot has stepped
+## away from home (a break step) the body follows only `break_follow` of it: the leg stretches,
+## the torso stays near neutral because it is coming back.
+func _pelvis(feet: Dictionary, w_r: float) -> Vector3:
+	var hl := _v(p.home_L, 0.0)
+	var hr := _v(p.home_R, 0.0)
+	var mix: float = (1.0 - p.pelvis_over_foot) + (2.0 * p.pelvis_over_foot - 1.0) * w_r
+	var away: Vector3 = (feet.L - hl).lerp(feet.R - hr, mix)
+	return hl.lerp(hr, mix) + Vector3(away.x, 0, away.z) * p.break_follow
+
+
+## Releases left over from the move into a, then the moves into b with the key on the beat.
+func _play_all(z: Dictionary, a: Dictionary, b: Dictionary, s: float, out: Dictionary) -> void:
 	var t0 := 0.0
 	var rel: Array = _split(segments(z, a))[1]
 	if not rel.is_empty():
@@ -103,7 +121,7 @@ func sample(t: float, prev: String, cur: String, next: String) -> Dictionary:
 
 	var pre: Array = _split(segments(a, b))[0]
 	if pre.is_empty():
-		return out
+		return
 	var key: Array = pre.back()
 	if key[0] == "w":
 		var w_start := 1.0 - float(p.weight_phase)
@@ -111,7 +129,6 @@ func sample(t: float, prev: String, cur: String, next: String) -> Dictionary:
 		_play([key], a, b, s, w_start, 1.0, out)
 	else:
 		_play(pre, a, b, s, t0, 1.0, out)
-	return out
 
 
 ## Play segments (moves from state a to b) one after another inside [from, to] of the beat.

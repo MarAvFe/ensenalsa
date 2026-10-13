@@ -30,6 +30,9 @@ var music := AudioStreamPlayer.new()
 var music_on := true
 var stretch := AudioEffectPitchShift.new()
 var next_seek_ms := 0
+var tick := AudioStreamPlayer.new() # counts are clicked when the music is off
+var tick_sound := _click(1500.0, 0.035)
+var tap_sound := _click(2600.0, 0.06)
 
 
 func _ready() -> void:
@@ -64,6 +67,7 @@ func _ready() -> void:
 	# re-seeked every frame (heard as buzzing). Engine-mixed streams report it and allow the effect.
 	music.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	add_child(music)
+	add_child(tick)
 	AudioServer.add_bus_effect(0, stretch)
 	weight_disc = _flat(CylinderMesh.new(), GOLD, 0.8)
 	weight_disc.mesh.top_radius = 0.13
@@ -75,6 +79,7 @@ func _ready() -> void:
 func _process(dt: float) -> void:
 	var rate := bpm / 60.0 * speed
 	var bar := floori(T / 8.0)
+	var T0 := T
 	if playing:
 		T += dt * rate
 	elif glide != 0.0:
@@ -94,7 +99,11 @@ func _process(dt: float) -> void:
 		prev_basic = cur_basic # stepping back over count 1: stay in this basic
 	var t := fposmod(T, 8.0)
 	var pose := ch.sample(t, prev_basic, cur_basic, queued)
-	dancer.apply(pose.feet, pose.pitch, pose.w_r, ch.p.pelvis_over_foot, ch.p.pelvis_height, pose.dip)
+	if not music_on and (floori(T) > floori(T0) or ceili(T) < ceili(T0)): # landed on a count
+		var st: Dictionary = ch.basics[cur_basic][posmod(roundi(T), 8)]
+		tick.stream = tap_sound if "tap" in st.action.values() else tick_sound
+		tick.play()
+	dancer.apply(pose.feet, pose.pitch, pose.pelvis, ch.p.pelvis_height, pose.dip)
 	ui.play.text = "Pause" if playing else "Play"
 	_update_markers(pose, t)
 	_sync_music()
@@ -358,6 +367,22 @@ func _corner(layer: CanvasLayer, c: Control, preset: Control.LayoutPreset) -> vo
 	c.grow_horizontal = Control.GROW_DIRECTION_BOTH if preset == Control.PRESET_CENTER_BOTTOM \
 		else (Control.GROW_DIRECTION_BEGIN if left else Control.GROW_DIRECTION_END)
 	c.grow_vertical = Control.GROW_DIRECTION_BEGIN if up else Control.GROW_DIRECTION_END
+
+
+## Short decaying sine "click" generated in code (no audio asset needed).
+static func _click(freq: float, length: float) -> AudioStreamWAV:
+	var rate := 44100
+	var n := int(rate * length)
+	var data := PackedByteArray()
+	data.resize(n * 2)
+	for i in n:
+		var x := float(i) / rate
+		data.encode_s16(i * 2, int(sin(TAU * freq * x) * exp(-x / length * 6.0) * 0.5 * 32767))
+	var w := AudioStreamWAV.new()
+	w.format = AudioStreamWAV.FORMAT_16_BITS
+	w.mix_rate = rate
+	w.data = data
+	return w
 
 
 func _check(parent: Control, text: String, on: bool, cb: Callable) -> CheckBox:

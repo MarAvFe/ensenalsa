@@ -24,7 +24,7 @@ func _initialize() -> void:
 	for k in n + 1:
 		var t := float(k) / n * beats - 1.0
 		var pose: Dictionary = at.call(t)
-		d.apply(pose.feet, pose.pitch, pose.w_r, ch.p.pelvis_over_foot, ch.p.pelvis_height, pose.dip)
+		d.apply(pose.feet, pose.pitch, pose.pelvis, ch.p.pelvis_height, pose.dip)
 		for side in ["L", "R"]:
 			var leg: Dictionary = d.legs[side]
 			var f: Vector3 = pose.feet[side]

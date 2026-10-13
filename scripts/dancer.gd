@@ -58,12 +58,9 @@ func _ready() -> void:
 
 
 ## Pose the dancer. `feet` maps "L"/"R" to dancer-frame Vector3(x, lift, z) of the sole,
-## `pitch` maps side to foot pitch, `w_r` is weight on R (0 = all L, 1 = all R),
-## `over` is how far the pelvis travels toward the weighted foot (0.5..1), `dip` lowers it.
-func apply(feet: Dictionary, pitch: Dictionary, w_r: float, over: float, height: float, dip: float) -> void:
-	var l: Vector3 = feet.L
-	var r: Vector3 = feet.R
-	var c := l.lerp(r, (1.0 - over) + (2.0 * over - 1.0) * w_r)
+## `pitch` maps side to foot pitch, `c` is the dancer-frame pelvis position (x, _, z),
+## `dip` lowers the pelvis from `height`.
+func apply(feet: Dictionary, pitch: Dictionary, c: Vector3, height: float, dip: float) -> void:
 	var y := height - dip
 	for side in ["L", "R"]: # wide stance: sink the pelvis just enough that both legs keep a slight bend
 		var f: Vector3 = feet[side]
