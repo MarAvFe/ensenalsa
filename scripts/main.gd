@@ -22,12 +22,13 @@ var bpm := 100.0
 var speed := 1.0
 
 var ui := {}
-var prints := {} # "side:x,z" -> {mesh, ring}
+var prints := {} # "side:x,z" -> {mesh, ring, label}
 var prints_basic := ""
 var weight_disc: MeshInstance3D
 var cams: Array[Camera3D] = []
 var music := AudioStreamPlayer.new()
 var music_on := true
+var floor_numbers := false # count labels on the footprints
 var stretch := AudioEffectPitchShift.new()
 var next_seek_ms := 0
 var tick := AudioStreamPlayer.new() # counts are clicked when the music is off
@@ -204,6 +205,7 @@ func _build_prints(basic: String) -> void:
 		lbl.rotation_degrees.x = -90
 		lbl.modulate = SIDE_COL[side].lightened(0.5)
 		lbl.position = Vector3(signf(info.pos.x) * 0.2, 0.006, 0) # outward, so crossed steps don't swap labels
+		lbl.visible = floor_numbers
 		m.add_child(lbl)
 		var ring: MeshInstance3D = null
 		if info.tap:
@@ -213,7 +215,7 @@ func _build_prints(basic: String) -> void:
 			ring = _flat(tor, GOLD, 0.9)
 			ring.scale = Vector3.ONE
 			m.add_child(ring)
-		prints[key] = {"mesh": m, "ring": ring}
+		prints[key] = {"mesh": m, "ring": ring, "label": lbl}
 
 
 func _flat(mesh: Mesh, col: Color, alpha: float) -> MeshInstance3D:
@@ -313,6 +315,10 @@ func _build_ui() -> void:
 	var loop := _check(opts, "Loop", looping, func(on): looping = on)
 	loop.tooltip_text = "Off: stop on count 8"
 	ui.music = _check(opts, "Music  (M)", music_on, func(on): music_on = on)
+	_check(opts, "Floor numbers", floor_numbers, func(on):
+		floor_numbers = on
+		for pr in prints.values():
+			pr.label.visible = on)
 	var bpm_row := HBoxContainer.new()
 	opts.add_child(bpm_row)
 	_label(bpm_row, "BPM")

@@ -28,7 +28,7 @@ The export uses the single-threaded web template, so it needs no special COOP/CO
 | bottom centre | `< Beat` / `Pause` / `Beat >` (← / Space / →) | glide one count back / play-pause / glide one count forward |
 | bottom right | `Diagonal` / `Front-back` / `Sides` | queue a basic; the dancer switches on the next count 1 |
 | top right | camera dropdown (1–6) | behind, front, head-down-to-feet (hips and up hidden), feet close-up from the side, behind 30°, front 30° |
-| bottom left | gear | Loop (off = stop on count 8), Music (M; when off, every count clicks and tap counts sound a higher tap), BPM (default 100), Speed 0.25x–1x |
+| bottom left | gear | Loop (off = stop on count 8), Music (M; when off, every count clicks and tap counts sound a higher tap), Floor numbers (count labels on the footprints, off by default), BPM (default 100), Speed 0.25x–1x |
 
 ## How it works
 
