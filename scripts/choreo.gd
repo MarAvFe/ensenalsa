@@ -98,15 +98,18 @@ func sample(t: float, prev: String, cur: String, next: String) -> Dictionary:
 	return out
 
 
-## Pelvis over the weight, measured on the home stance; when the weighted foot has stepped
-## away from home (a break step) the body follows only `break_follow` of it: the leg stretches,
-## the torso stays near neutral because it is coming back.
+## Pelvis over the weight, measured on the home stance. On a break step (weighted foot away
+## from home) that shift fades out over `break_distance` and the body follows only `break_follow`
+## of the step: the leg stretches, the torso stays near neutral because it is coming back.
 func _pelvis(feet: Dictionary, w_r: float) -> Vector3:
 	var hl := _v(p.home_L, 0.0)
 	var hr := _v(p.home_R, 0.0)
 	var mix: float = (1.0 - p.pelvis_over_foot) + (2.0 * p.pelvis_over_foot - 1.0) * w_r
 	var away: Vector3 = (feet.L - hl).lerp(feet.R - hr, mix)
-	return hl.lerp(hr, mix) + Vector3(away.x, 0, away.z) * p.break_follow
+	away.y = 0.0
+	var centre := hl.lerp(hr, 0.5)
+	var breaking := clampf(away.length() / p.break_distance, 0.0, 1.0)
+	return centre + (hl.lerp(hr, mix) - centre) * (1.0 - breaking) + away * p.break_follow
 
 
 ## Releases left over from the move into a, then the moves into b with the key on the beat.
