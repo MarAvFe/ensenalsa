@@ -5,7 +5,6 @@ extends Node3D
 const Choreo := preload("res://scripts/choreo.gd")
 const Dancer := preload("res://scripts/dancer.gd")
 const GOLD := Color(1.0, 0.8, 0.2)
-const SIDE_COL := {"L": Color(0.25, 0.45, 0.95), "R": Color(0.95, 0.3, 0.25)}
 const FOOT_FWD := 0.07 # footprint centre sits this far ahead of the ankle
 const CAM_NAMES := ["Behind", "Front", "Feet (from head)", "Feet (side)", "Behind 30°", "Front 30°", "Behind 45°", "Front 45°"]
 
@@ -88,6 +87,7 @@ func _ready() -> void:
 	follower = Dancer.new()
 	follower.name = "Follower"
 	follower.head_color = Color(1.0, 0.55, 0.1)
+	follower.side_colors = {"L": Color(0.4, 0.8, 1.0), "R": Color(1.0, 0.5, 0.62)} # her shades: sky blue, coral pink
 	follower.hand_color = Dancer.COL_BODY
 	follower.hand_size = 0.042
 	follower.position = Vector3(0, 0, -ch.p.partner_distance) # in front of the leader, facing him
@@ -265,7 +265,7 @@ func _build_prints(basic: String) -> void:
 		var info: Dictionary = counts[key]
 		var box := BoxMesh.new()
 		box.size = Vector3(0.10, 0.004, 0.26)
-		var m := _flat(box, SIDE_COL[side], 0.3)
+		var m := _flat(box, main_dancer().side_colors[side], 0.3)
 		m.transform = Transform3D(main_dancer().global_basis, _floor_pos(Vector3(info.pos.x, 0, info.pos.z))) # labels read from the main POV
 		add_child(m)
 		var lbl := Label3D.new()
@@ -274,7 +274,7 @@ func _build_prints(basic: String) -> void:
 		lbl.pixel_size = 0.004
 		lbl.outline_size = 10
 		lbl.rotation_degrees.x = -90
-		lbl.modulate = SIDE_COL[side].lightened(0.5)
+		lbl.modulate = main_dancer().side_colors[side].lightened(0.5)
 		lbl.position = Vector3(signf(info.pos.x) * 0.2, 0.006, 0) # outward, so crossed steps don't swap labels
 		lbl.visible = floor_numbers
 		m.add_child(lbl)

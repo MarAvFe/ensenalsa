@@ -12,12 +12,11 @@ const PELVIS_H := 0.93
 const SPINE_UNTWIST := [0.4, 0.35, 0.25] # share of the hip twist each spine joint undoes: shoulders stay square
 
 const COL_BODY := Color(0.75, 0.72, 0.68)
-const COL_L := Color(0.25, 0.45, 0.95)
-const COL_R := Color(0.95, 0.3, 0.25)
 const UPPER_ARM := 0.30
 const FOREARM := 0.27
 
 @export var head_color := Color(0.55, 0.3, 0.8) # leader purple; the follower sets orange
+@export var side_colors := {"L": Color(0.25, 0.45, 0.95), "R": Color(0.95, 0.3, 0.25)} # leg colours: left blue, right red
 @export var hand_color := Color(0.9, 0.12, 0.12) # leader: red, slightly bigger hands that lead
 @export var hand_size := 0.055
 
@@ -47,7 +46,7 @@ func _ready() -> void:
 
 	for side in ["L", "R"]:
 		var sx := -1.0 if side == "L" else 1.0
-		var col := COL_L if side == "L" else COL_R
+		var col: Color = side_colors[side]
 		var sh := _joint(s, "Shoulder" + side, Vector3(0.19 * sx, 0.13, 0))
 		sh.set_meta("rest", sh.position)
 		_sphere(sh, 0.05, Vector3.ZERO, COL_BODY)
