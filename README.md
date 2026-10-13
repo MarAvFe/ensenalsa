@@ -26,7 +26,7 @@ The export uses the single-threaded web template, so it needs no special COOP/CO
 | Where | Control | Action |
 |---|---|---|
 | bottom centre | `< Beat` / `Pause` / `Beat >` (← / Space / →) | glide one count back / play-pause / glide one count forward |
-| bottom right | `Spin` (S) | queue a turn on the next count 1 or 5 (still ahead). Front-back and Sides: the follower turns under the leader's raised right hand. Diagonal: two turns, the leader first, then the follower 4 counts later. Each turn is one full right turn over counts 1-3 (or 5-7), 120° per step, feet closed under the body; the planted foot pivots in place, it never slides |
+| bottom right | `Spin` (S, yellow = experimental) | queue a turn on the next count 1 or 5 (still ahead). Front-back and Sides: the follower turns under the leader's raised right hand. Diagonal: two turns, the leader first, then the follower 4 counts later. Each turn is one full right turn over counts 1-3 (or 5-7), 120° per step, feet closed under the body; the planted foot pivots in place, it never slides |
 | bottom right | `Diagonal` / `Front-back` / `Sides` | queue a basic; the dancers switch on the next count 1, and on count 8 before it the leader prepares the change: his hands glow and his arms draw away from the next basic's first step (`prep_reach`, `prep_shoulder`), leading the follower |
 | top left | style dropdown | **Flat** (footwork only) or **Natural** (arms folded with elbows at belly and fists at chest height, hips twist with the steps while the shoulders stay square). Switching blends smoothly. |
 | top left | Follower toggle (F) | the follower (orange head, sky-blue / coral legs) dances the basic in front of the leader (purple head, red hands), holding hands; cameras centre on the couple |

@@ -533,7 +533,9 @@ func _build_ui() -> void:
 		b.toggle_mode = true
 		b.button_group = group
 		ui.basic_buttons[name] = b
-	_button(basics_row, "Spin  (S)", queue_spin).tooltip_text = "Turn on the next count 1 or 5"
+	var spin := _button(basics_row, "Spin  (S)", queue_spin)
+	spin.tooltip_text = "Experimental: turn on the next count 1 or 5"
+	spin.modulate = Color(1.0, 0.85, 0.2) # yellow = still experimental, works but needs tweaks
 	_corner(layer, right, Control.PRESET_BOTTOM_RIGHT)
 
 
